@@ -99,7 +99,7 @@ export function WheelExperience({
     router.refresh(); // header menu shows spin tickets
   }
 
-      async function spin() {
+        async function spin() {
     if (spinning || !canSpin) return;
     setError(null);
     setNotice(null);
@@ -117,12 +117,11 @@ export function WheelExperience({
     setSpinning(true);
     wheelSfx.prime();
 
-    // 1. เริ่มเอฟเฟกต์และเสียงทันทีตอนกด (0ms)
-    const activeSeconds = Math.min(SPIN_SECONDS, 2.5);
+    const activeSeconds = Math.min(SPIN_SECONDS, 2.4);
 
     if (!reduce) {
-      const effect: WheelFx = (["coins", "zodiac", "orbit", "reaper"] as const)[
-        Math.floor(Math.random() * 4)
+      const effect: WheelFx = (["zodiac", "orbit"] as const)[
+        Math.floor(Math.random() * 2)
       ];
       const dir: SweepDir = Math.random() < 0.5 ? 1 : -1;
       const box = wheelBox.current?.getBoundingClientRect();
@@ -139,12 +138,33 @@ export function WheelExperience({
       wheelSfx.play("orbit", { seconds: activeSeconds, dir: 1 });
     }
 
-    // หมุนนำร่องเบาๆ ในเฟรมแรกเพื่อให้รู้ว่าตอบสนองทันที
-    const kickDeg = rotationRef.current + (reduce ? 60 : 180);
-    rotationRef.current = kickDeg;
-    setRotation(kickDeg);
+    // หมุนวนลื่นๆ เบื้องหลังขณะรอผล API โดยยังไม่ล็อกจุดหยุด
+    let rafId: number | null = null;
+    let settled = false;
+    let lastTs = performance.now();
+
+    const cruiseLoop = (now: number) => {
+      if (settled) return;
+      const dt = Math.min((now - lastTs) / 1000, 0.05);
+      lastTs = now;
+      const speedDegPerSec = reduce ? 240 : 720;
+      rotationRef.current += speedDegPerSec * dt;
+      setRotation(rotationRef.current);
+      rafId = requestAnimationFrame(cruiseLoop);
+    };
+
+    rafId = requestAnimationFrame(cruiseLoop);
+
+    const stopCruise = () => {
+      settled = true;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
 
     const revert = () => {
+      stopCruise();
       if (timer.current) clearTimeout(timer.current);
       setFx(null);
       wheelSfx.stop();
@@ -154,7 +174,6 @@ export function WheelExperience({
     };
 
     try {
-      // 2. เรียก API รับผลรางวัล
       const r = await fetch("/api/lucky-wheel/spin", { method: "POST" });
       const body = await r.json().catch(() => ({
         error: { code: "INTERNAL", message: "หมุนไม่สำเร็จ" },
@@ -176,23 +195,21 @@ export function WheelExperience({
 
       const res = body as SpinResponse;
 
-      // 3. สั่งหมุนไปหยุดตรงช่องรางวัลจริง "ครั้งเดียว" แล้วจบไปที่ finish()
+      // หยุดลูปหมุนค้าง แล้วสั่งหมุนไปหยุดตรงช่องรางวัลจริง "ครั้งเดียว"
+      stopCruise();
       const offset = (Math.random() - 0.5) * STEP * 0.7;
       const target = (360 - (res.segmentIndex * STEP + offset) + 720) % 360;
       const current = ((rotationRef.current % 360) + 360) % 360;
       const delta = (target - current + 360) % 360;
-      const turns = reduce ? 1 : 3;
+      const turns = reduce ? 0 : 2;
       const finalNext = rotationRef.current + turns * 360 + delta;
 
       rotationRef.current = finalNext;
       pending.current = res;
-
-      requestAnimationFrame(() => {
-        setRotation(finalNext);
-      });
+      setRotation(finalNext);
 
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(finish, activeSeconds * 1000 + 150);
+      timer.current = setTimeout(finish, activeSeconds * 1000 + 120);
     } catch {
       revert();
       router.refresh();
