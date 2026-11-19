@@ -32,12 +32,12 @@ async function Data() {
   const admin = createAdminClient();
   const { data: rows } = await admin
     .from("withdrawal_requests")
-    .select("id, user_id, amount_thb, bank_name, account_number, account_name, status, created_at, reviewed_by, reviewed_at")
+    .select("id, user_id, amount_thb, bank_name, account_number, account_name, status, created_at, reviewed_by, reviewed_at, source")
     .order("status", { ascending: false }) // 'pending' sorts after 'approved'/'rejected' desc → first
     .order("created_at", { ascending: true })
     .limit(100);
   const local = await shouldUseLocalWithdrawals(admin);
-  const list = local ? await listLocalRequests() : (rows ?? []);
+  const list = (local ? await listLocalRequests() : (rows ?? [])).map((r) => ({ ...r, source: ("source" in r && r.source) || ("jackpot" as "jackpot" | "lucky_card") }));
 
   // Evidence for the reviewer: the user's jackpot spin(s) and current wallet.
   const userIds = [...new Set(list.map((r) => r.user_id))];
@@ -65,7 +65,10 @@ async function Data() {
           <li key={r.id} className="rounded-2xl border border-gold/25 bg-velvet/70 p-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <b className="text-lg text-gold-light">{r.amount_thb.toLocaleString("th-TH")} บาท</b>
-              <span className="text-cream">{WITHDRAW_STATUS_LABEL[r.status]}</span>
+              <span className="text-cream">
+                {r.source === "lucky_card" ? "ดวงดี มีเฮ · " : "แจ็กพอตกงล้อ · "}
+                {WITHDRAW_STATUS_LABEL[r.status]}
+              </span>
             </div>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-cream-muted">
               <dt>ธนาคาร</dt><dd className="text-cream">{r.bank_name}</dd>
@@ -73,17 +76,21 @@ async function Data() {
               <dt>ชื่อบัญชี</dt><dd className="text-cream">{r.account_name}</dd>
               <dt>ผู้ใช้</dt><dd className="break-all font-mono text-xs">{r.user_id}</dd>
               <dt>ส่งคำขอ</dt><dd>{formatThaiDateTime(r.created_at)}</dd>
-              <dt>บันทึกแจ็กพอต</dt>
-              <dd>
-                {jackpots.length === 0
-                  ? <span className="text-rose-300">ไม่พบบันทึกถูกแจ็กพอตของผู้ใช้นี้!</span>
-                  : jackpots.map((s) => `สปินที่ ${s.paid_spin_number ?? "-"} (${formatThaiDateTime(s.created_at)})`).join(" · ")}
-              </dd>
+              {r.source === "jackpot" && (
+                <>
+                  <dt>บันทึกแจ็กพอต</dt>
+                  <dd>
+                    {jackpots.length === 0
+                      ? <span className="text-rose-300">ไม่พบบันทึกถูกแจ็กพอตของผู้ใช้นี้!</span>
+                      : jackpots.map((s) => `สปินที่ ${s.paid_spin_number ?? "-"} (${formatThaiDateTime(s.created_at)})`).join(" · ")}
+                  </dd>
+                </>
+              )}
               <dt>กระเป๋าตอนนี้</dt>
               <dd>{w ? `${w.balance.toLocaleString("th-TH")} เหรียญ · สิทธิ์ถอนคงเหลือ ${w.jackpot_withdrawals_available ?? (local ? "(ไฟล์ทดสอบ)" : 0)}` : "-"}</dd>
               {r.reviewed_at && (<><dt>ตรวจโดย</dt><dd>{r.reviewed_by} · {formatThaiDateTime(r.reviewed_at)}</dd></>)}
             </dl>
-            {r.status === "pending" && <ReviewButtons id={r.id} />}
+            {r.status === "pending" && <ReviewButtons id={r.id} source={r.source} amountThb={r.amount_thb} />}
           </li>
         );
       })}

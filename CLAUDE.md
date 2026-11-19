@@ -239,6 +239,14 @@ wait for the owner's confirmation before starting the next.
   (`src/lib/slip/receiver.ts`; TH or EN name picked by the slip's script). UI posts to `/api/topup/verify-slip` (alias of `/verify`); DUPLICATE → 400; LINE push to admin on each new credit;
   /topup shows PromptPay 083-779-2265 + copy button. `THUNDER_CHECK_DUPLICATE=false` disables Thunder's own duplicate flag. NOT yet tested with a real slip. The earlier "mock mode" note is superseded.
 
+- **"ดวงดี มีเฮ" lucky card game (code done 2026-11-20, awaiting owner review):** 20 coins/round, flip 1 of 8 cards. Odds/prize live in ONE server-only file `src/lib/lucky-card-config.ts`
+  (weights /10,000: bonus100 150 · bonus300 40 · bonus500 16 · secret 25 · message = rest (9,769) — 70% house profit; `SECRET_PRIZE_THB=1000`, 1,000 coins = 1,000 THB; price + bonus whitelist are also enforced in SQL). `src/lib/lucky-card/draw.ts` draws with crypto;
+  108 messages in `src/data/lucky-card-messages.ts`. Routes: `POST /api/lucky-card/play` (`{cardIndex}` only → RPC `play_lucky_card`: charge + bonus + secret-prize entitlement + log in one transaction),
+  `POST /api/lucky-card/withdraw` (`{prizeId, bank…}` → RPC `request_lucky_card_withdrawal`, prize flips pending→withdrawn once). Secret prize is NOT credited as coins: row in `lucky_card_prizes`;
+  "ถอนทีหลัง" prizes are listed on /withdraw (`PendingPrizeList`) and in /admin/withdrawals (`withdrawal_requests.source='lucky_card'`; reject restores the prize). Page `/lucky-card`, home card, `/lucky-card` is a protected prefix.
+  **MIGRATION `0006_lucky_card.sql` MUST BE RUN in the SQL editor (after 0005) — no fallback; the game returns 503 until then.** It also relaxes `withdrawal_requests` (amount no longer fixed 5,000).
+  Verified: tsc, lint, 73 tests, build green; pages/API smoke-tested (unauth → 307/401). NOT verified: the SQL itself, real-DB play, browser UI.
+
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its
    comment) and set:

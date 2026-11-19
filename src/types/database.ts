@@ -196,8 +196,39 @@ export type Database = {
           account_name: string;
           status: WithdrawalStatus;
           ledger_id: string | null;
+          source: "jackpot" | "lucky_card";
+          prize_id: string | null;
           reviewed_by: string | null;
           reviewed_at: Timestamp | null;
+          created_at: Timestamp;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      lucky_card_plays: {
+        Row: {
+          id: string;
+          user_id: string;
+          card_index: number;
+          result_kind: "message" | "bonus" | "secret";
+          message_id: string | null;
+          bonus_coins: number;
+          prize_id: string | null;
+          created_at: Timestamp;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      lucky_card_prizes: {
+        Row: {
+          id: string;
+          user_id: string;
+          play_id: string | null;
+          amount_thb: number;
+          status: "pending" | "withdrawn";
+          withdrawal_request_id: string | null;
           created_at: Timestamp;
         };
         Insert: never;
@@ -273,6 +304,22 @@ export type Database = {
         Args: { p_request_id: string; p_approve: boolean; p_reviewer: string };
         Returns: Json; // { status }
       };
+      play_lucky_card: {
+        Args: {
+          p_user_id: string;
+          p_cost: number;
+          p_card_index: number;
+          p_kind: "message" | "bonus" | "secret";
+          p_message_id: string | null;
+          p_bonus_coins: number;
+          p_prize_thb: number;
+        };
+        Returns: Json; // { play_id, balance, prize_id }
+      };
+      request_lucky_card_withdrawal: {
+        Args: { p_user_id: string; p_prize_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
+        Returns: Json; // { request_id, amount_thb }
+      };
       daily_checkin: {
         Args: { p_user_id: string };
         Returns: Json; // { granted, spin_tickets, checkin_date }
@@ -308,6 +355,11 @@ export const RPC_ERRORS = [
   "NO_WITHDRAWAL_QUOTA",
   "WITHDRAWAL_NOT_FOUND",
   "WITHDRAWAL_ALREADY_REVIEWED",
+  "PRIZE_NOT_FOUND",
+  "PRIZE_ALREADY_WITHDRAWN",
+  "INVALID_OUTCOME",
+  "INVALID_CARD",
+  "INVALID_COST",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

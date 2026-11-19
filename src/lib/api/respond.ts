@@ -27,6 +27,11 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   NO_WITHDRAWAL_QUOTA: { status: 403, message: "คุณไม่มีสิทธิ์ถอนรางวัลแจ็กพอต" },
   WITHDRAWAL_NOT_FOUND: { status: 404, message: "ไม่พบคำขอถอน" },
   WITHDRAWAL_ALREADY_REVIEWED: { status: 409, message: "คำขอนี้ถูกดำเนินการไปแล้ว" },
+  PRIZE_NOT_FOUND: { status: 404, message: "ไม่พบสิทธิ์รางวัลนี้" },
+  PRIZE_ALREADY_WITHDRAWN: { status: 409, message: "สิทธิ์รางวัลนี้ถูกถอนไปแล้ว" },
+  INVALID_OUTCOME: { status: 400, message: "ผลรางวัลไม่ถูกต้อง" },
+  INVALID_CARD: { status: 400, message: "เลือกไพ่ไม่ถูกต้อง" },
+  INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
 };
 
 /** Convert a Supabase RPC error into a Thai API error response. */

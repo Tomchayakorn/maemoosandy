@@ -50,6 +50,18 @@ export default function Home() {
           price="ฟรี / ใช้สิทธิ์หมุน"
           icon={<WheelIcon className="size-10" />}
         />
+        <ServiceCard
+          index={3}
+          href="/lucky-card"
+          title="ดวงดี มีเฮ เปิดไพ่ลุ้นโชค"
+          description="เปิดไพ่ 1 ใบจาก 8 ใบ ลุ้น 108 ข้อความมงคล โบนัส 100 / 300 / 500 เหรียญ และรางวัลลับ “เทพประทานทรัพย์”"
+          price={
+            <span className="inline-flex items-center gap-1">
+              <CoinIcon className="size-4" /> {formatCoins(20)} เหรียญ / เปิด 1 ใบ
+            </span>
+          }
+          icon={<TarotIcon className="size-10" />}
+        />
       </section>
 
       <section className="mt-8 px-4">

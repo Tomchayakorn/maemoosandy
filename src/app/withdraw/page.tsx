@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { WithdrawForm } from "./withdraw-form";
+import { PendingPrizeList } from "@/components/lucky-card/PendingPrizeList";
 import { JackpotBanner } from "@/components/withdraw/JackpotBanner";
 import { MysticCard } from "@/components/ui/MysticCard";
 import { formatThaiDateTime } from "@/components/topup/topup-labels";
@@ -40,14 +41,21 @@ async function WithdrawData() {
   if (!user) redirect("/login?next=/withdraw");
 
   const supabase = await createClient();
-  const [wallet, requests] = await Promise.all([
+  const [wallet, requests, prizes] = await Promise.all([
     getMyWallet(),
     supabase
       .from("withdrawal_requests")
       .select("id, amount_thb, bank_name, account_number, account_name, status, created_at")
       .order("created_at", { ascending: false })
       .limit(30),
+    // saved "ถอนทีหลัง" prizes from ดวงดี มีเฮ (RLS: own rows only; empty if migration 0006 isn't installed)
+    supabase
+      .from("lucky_card_prizes")
+      .select("id, amount_thb, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
   ]);
+  const pendingPrizes = (prizes.data ?? []).map((p) => ({ ...p, label: formatThaiDateTime(p.created_at) }));
   const local = await shouldUseLocalWithdrawals(createAdminClient());
   const quota = local ? await getLocalQuota(user.id) : (wallet?.jackpot_withdrawals_available ?? 0);
   const history = local ? await listLocalRequests(user.id) : (requests.data ?? []);
@@ -56,14 +64,16 @@ async function WithdrawData() {
 
   return (
     <>
+      <PendingPrizeList prizes={pendingPrizes} />
+
       {quota > 0 ? (
         <>
           <JackpotBanner count={quota} />
           <WithdrawForm balance={balance} />
         </>
-      ) : (
+      ) : pendingPrizes.length > 0 ? null : (
         <MysticCard className="p-5 text-center text-sm text-cream-muted">
-          ตอนนี้คุณยังไม่มีสิทธิ์ถอนเงิน สิทธิ์นี้ได้รับเฉพาะผู้ที่ถูกรางวัลแจ็กพอตใหญ่ {WITHDRAW_COINS.toLocaleString("th-TH")} เหรียญจากกงล้อมหาเฮงเท่านั้น
+          ตอนนี้คุณยังไม่มีสิทธิ์ถอนเงิน สิทธิ์นี้ได้รับเฉพาะผู้ที่ถูกรางวัลแจ็กพอตใหญ่ {WITHDRAW_COINS.toLocaleString("th-TH")} เหรียญจากกงล้อมหาเฮง หรือรางวัลลับ “เทพประทานทรัพย์” จากเกมดวงดี มีเฮเท่านั้น
         </MysticCard>
       )}
 

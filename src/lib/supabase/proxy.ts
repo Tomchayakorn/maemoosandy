@@ -4,7 +4,7 @@ import type { Database } from "@/types/database";
 import { isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./config";
 
 /** Pages that need a signed-in user. API routes check auth themselves. */
-const PROTECTED_PREFIXES = ["/tarot", "/birthdate", "/topup", "/lucky-wheel", "/history", "/withdraw", "/admin"];
+const PROTECTED_PREFIXES = ["/tarot", "/birthdate", "/topup", "/lucky-wheel", "/lucky-card", "/history", "/withdraw", "/admin"];
 
 /**
  * Refreshes the Supabase auth session cookie on every request and does an
@@ -34,11 +34,15 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({ name, value, ...options })
+        })
       },
     },
   });
