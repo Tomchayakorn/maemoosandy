@@ -99,7 +99,7 @@ export function WheelExperience({
     router.refresh(); // header menu shows spin tickets
   }
 
-                async function spin() {
+                  async function spin() {
     if (spinning || !canSpin) return;
     setError(null);
     setNotice(null);
@@ -117,8 +117,7 @@ export function WheelExperience({
     setSpinning(true);
     wheelSfx.prime();
 
-    const quickSec = reduce ? 0.5 : 1.8;
-    const finishSec = reduce ? 0.4 : 1.1;
+    const durationSec = reduce ? 0.6 : Math.min(seconds || 2.2, 2.2);
 
     if (!reduce) {
       const effect: WheelFx = (["zodiac", "orbit"] as const)[
@@ -132,17 +131,12 @@ export function WheelExperience({
         dir,
         cx: box ? box.left + box.width / 2 : window.innerWidth / 2,
         cy: box ? box.top + box.height / 2 : window.innerHeight / 2,
-        seconds: quickSec + finishSec,
+        seconds: durationSec,
       });
-      wheelSfx.play(effect, { seconds: quickSec + finishSec, dir });
+      wheelSfx.play(effect, { seconds: durationSec, dir });
     } else {
-      wheelSfx.play("orbit", { seconds: quickSec + finishSec, dir: 1 });
+      wheelSfx.play("orbit", { seconds: durationSec, dir: 1 });
     }
-
-    // เริ่มหมุนทันทีโดยไม่ต้องรอ API
-    const immediateNext = rotationRef.current + (reduce ? 180 : 3 * 360);
-    rotationRef.current = immediateNext;
-    setRotation(immediateNext);
 
     const revert = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -175,12 +169,12 @@ export function WheelExperience({
 
       const res = body as SpinResponse;
 
-      // เมื่อผลลัพธ์มาแล้ว ให้หมุนต่อไปหยุดตรงช่องรางวัลจริงแบบกระชับ
+      // สั่งหมุนไปหยุดตรงช่องรางวัลจริง "ครั้งเดียว"
       const offset = (Math.random() - 0.5) * STEP * 0.7;
       const target = (360 - (res.segmentIndex * STEP + offset) + 720) % 360;
       const current = ((rotationRef.current % 360) + 360) % 360;
       const delta = (target - current + 360) % 360;
-      const turns = reduce ? 0 : 1;
+      const turns = reduce ? 0 : 2;
       const finalNext = rotationRef.current + turns * 360 + delta;
 
       rotationRef.current = finalNext;
@@ -188,7 +182,7 @@ export function WheelExperience({
       setRotation(finalNext);
 
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(finish, finishSec * 1000 + 120);
+      timer.current = setTimeout(finish, durationSec * 1000 + 150);
     } catch {
       revert();
       router.refresh();
