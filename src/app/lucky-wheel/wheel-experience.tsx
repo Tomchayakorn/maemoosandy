@@ -99,33 +99,64 @@ export function WheelExperience({
     router.refresh(); // header menu shows spin tickets
   }
 
-  async function spin() {
+                  async function spin() {
     if (spinning || !canSpin) return;
     setError(null);
     setNotice(null);
     setResult(null);
-    // Optimistic: show the cost right away (the prize stays hidden until the reveal).
+
     const before = { tickets, balance };
-    if (tickets > 0) setTickets(tickets - 1);
-    else {
+    if (tickets > 0) {
+      setTickets(tickets - 1);
+      walletBus.hold();
+    } else {
       setBalance(balance - WHEEL_SPIN_COST);
       walletBus.hold(balance - WHEEL_SPIN_COST);
     }
-    if (tickets > 0) walletBus.hold();
+
     setSpinning(true);
+    wheelSfx.prime();
+
+    const durationSec = reduce ? 0.6 : Math.min(seconds || 2.2, 2.2);
+
+    if (!reduce) {
+      const effect: WheelFx = (["zodiac", "orbit"] as const)[
+        Math.floor(Math.random() * 2)
+      ];
+      const dir: SweepDir = Math.random() < 0.5 ? 1 : -1;
+      const box = wheelBox.current?.getBoundingClientRect();
+      setFx({
+        id: Math.floor(Math.random() * 1e9) + 1,
+        effect,
+        dir,
+        cx: box ? box.left + box.width / 2 : window.innerWidth / 2,
+        cy: box ? box.top + box.height / 2 : window.innerHeight / 2,
+        seconds: durationSec,
+      });
+      wheelSfx.play(effect, { seconds: durationSec, dir });
+    } else {
+      wheelSfx.play("orbit", { seconds: durationSec, dir: 1 });
+    }
+
     const revert = () => {
+      if (timer.current) clearTimeout(timer.current);
+      setFx(null);
+      wheelSfx.stop();
       setTickets(before.tickets);
       setBalance(before.balance);
       walletBus.release(before.balance);
     };
-    wheelSfx.prime(); // unlock Web Audio inside this click (browsers require a gesture)
+
     try {
       const r = await fetch("/api/lucky-wheel/spin", { method: "POST" });
-      const body = await r.json().catch(() => ({ error: { code: "INTERNAL", message: "ระบบขัดข้องชั่วคราว ลองใหม่อีกครั้งนะคะ" } }));
+      const body = await r.json().catch(() => ({
+        error: { code: "INTERNAL", message: "หมุนไม่สำเร็จ" },
+      }));
+
       if (!r.ok) {
-        setError((body as { error?: ApiError }).error?.message ?? "หมุนไม่สำเร็จ ลองใหม่อีกครั้งนะคะ");
-        const code = (body as { error?: ApiError }).error?.code;
         revert();
+        setError((body as { error?: ApiError }).error?.message ?? "หมุนไม่สำเร็จ");
+        const code = (body as { error?: ApiError }).error?.code;
         if (code === "NO_SPIN_TICKETS") setTickets(0);
         if (code === "INSUFFICIENT_COINS") {
           setTickets(0);
@@ -133,39 +164,25 @@ export function WheelExperience({
         }
         router.refresh();
         setSpinning(false);
-        wheelSfx.stop();
         return;
       }
+
       const res = body as SpinResponse;
-      // Land somewhere inside the winning slice (cosmetic randomness only).
+
+      // สั่งหมุนไปหยุดตรงช่องรางวัลจริง "ครั้งเดียว"
       const offset = (Math.random() - 0.5) * STEP * 0.7;
       const target = (360 - (res.segmentIndex * STEP + offset) + 720) % 360;
       const current = ((rotationRef.current % 360) + 360) % 360;
       const delta = (target - current + 360) % 360;
-      const turns = reduce ? 0 : 5 + Math.floor(Math.random() * 3);
-      const next = rotationRef.current + turns * 360 + delta;
-      rotationRef.current = next;
-      pending.current = res;
-      setRotation(next);
+      const turns = reduce ? 0 : 2;
+      const finalNext = rotationRef.current + turns * 360 + delta;
 
-      // One of three random full-screen effects (+ matching synthesised sound) while the wheel spins.
-      if (!reduce) {
-        const effect: WheelFx = (["coins", "zodiac", "orbit", "reaper"] as const)[Math.floor(Math.random() * 4)];
-        const dir: SweepDir = Math.random() < 0.5 ? 1 : -1;
-        const box = wheelBox.current?.getBoundingClientRect();
-        setFx({
-          id: Math.floor(Math.random() * 1e9) + 1,
-          effect,
-          dir,
-          cx: box ? box.left + box.width / 2 : window.innerWidth / 2,
-          cy: box ? box.top + box.height / 2 : window.innerHeight / 2,
-          seconds,
-        });
-        wheelSfx.play(effect, { seconds, dir });
-      } else {
-        wheelSfx.play("orbit", { seconds, dir: 1 }); // reduced motion: sound only
-      }
-      timer.current = setTimeout(finish, (seconds + 0.4) * 1000); // safety net if onAnimationComplete is missed
+      rotationRef.current = finalNext;
+      pending.current = res;
+      setRotation(finalNext);
+
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(finish, durationSec * 1000 + 150);
     } catch {
       revert();
       router.refresh();
@@ -173,7 +190,6 @@ export function WheelExperience({
       setSpinning(false);
     }
   }
-
   async function checkin() {
     if (checking || checkedIn) return;
     setChecking(true);

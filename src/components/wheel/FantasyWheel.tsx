@@ -79,12 +79,12 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete }: Props)
     onCompleteRef.current = onComplete;
   });
 
-  // ── spin ────────────────────────────────────────────────────────────────
+  // — spin
   useEffect(() => {
-    if (rotation === disc.get()) return;
+    const spinDuration = Math.max(0.5, Math.min(seconds, 2.2));
     const controls = animate(disc, rotation, {
-      duration: seconds,
-      ease: [0.12, 0.7, 0.1, 1],
+      duration: spinDuration,
+      ease: [0.14, 0.88, 0.24, 1],
       onComplete: () => onCompleteRef.current(),
     });
     return () => controls.stop();

@@ -3,7 +3,7 @@ import { Charm, Cinzel, Noto_Serif_Thai, Prompt } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { BgmBootstrap } from "@/components/audio/BgmBootstrap";
-
+import LineSupportButton from "@/components/LineSupportButton";
 const prompt = Prompt({
   variable: "--font-prompt",
   subsets: ["thai", "latin"],
@@ -68,6 +68,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Header />
         {children}
         <BgmBootstrap />
+        <LineSupportButton />
       </body>
     </html>
   );
