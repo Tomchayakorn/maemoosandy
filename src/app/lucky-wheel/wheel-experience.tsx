@@ -117,8 +117,8 @@ export function WheelExperience({
     setSpinning(true);
     wheelSfx.prime();
 
-    const durationSec = reduce ? 0.8 : 2.6;
-    setSeconds(durationSec);
+   const durationSec = reduce ? 0.8 : Math.min(seconds || 2.6, 2.6);
+    
 
     if (!reduce) {
       const effect: WheelFx = (["zodiac", "orbit"] as const)[
