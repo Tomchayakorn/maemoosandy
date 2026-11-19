@@ -99,7 +99,7 @@ export function WheelExperience({
     router.refresh(); // header menu shows spin tickets
   }
 
-          async function spin() {
+           async function spin() {
     if (spinning || !canSpin) return;
     setError(null);
     setNotice(null);
@@ -118,7 +118,7 @@ export function WheelExperience({
     wheelSfx.prime();
 
     const startedAt = Date.now();
-    const totalSpinMs = reduce ? 900 : 2600;
+    const totalSpinMs = reduce ? 800 : 2500;
     const activeSeconds = totalSpinMs / 1000;
 
     if (!reduce) {
@@ -139,11 +139,6 @@ export function WheelExperience({
     } else {
       wheelSfx.play("orbit", { seconds: activeSeconds, dir: 1 });
     }
-
-    // ออกตัวหมุนทันทีในเฟรมแรก (0ms) เพื่อให้ตอบสนองทันทีที่กด
-    const quickKick = rotationRef.current + (reduce ? 90 : 360);
-    rotationRef.current = quickKick;
-    setRotation(quickKick);
 
     const revert = () => {
       if (timer.current) clearTimeout(timer.current);
@@ -176,26 +171,23 @@ export function WheelExperience({
 
       const res = body as SpinResponse;
 
-      // คำนวณมุมปลายทางให้ตรงช่องรางวัลจริง และคุมเวลาหมุนรวมไม่ให้เกิน ~2.6 วินาที
+      // สั่งหมุนไปหยุดตรงช่องรางวัลจริง "ครั้งเดียว" ภายในกรอบเวลา ~2.5 วินาที
       const offset = (Math.random() - 0.5) * STEP * 0.7;
       const target = (360 - (res.segmentIndex * STEP + offset) + 720) % 360;
       const current = ((rotationRef.current % 360) + 360) % 360;
       const delta = (target - current + 360) % 360;
 
       const elapsedMs = Date.now() - startedAt;
-      const remainingMs = Math.max(900, totalSpinMs - elapsedMs);
-      const turns = reduce ? 0 : remainingMs > 1500 ? 2 : 1;
+      const remainingMs = Math.max(500, totalSpinMs - elapsedMs);
+      const turns = reduce ? 0 : remainingMs > 1200 ? 3 : 2;
       const finalNext = rotationRef.current + turns * 360 + delta;
 
       rotationRef.current = finalNext;
       pending.current = res;
-
-      requestAnimationFrame(() => {
-        setRotation(finalNext);
-      });
+      setRotation(finalNext);
 
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(finish, remainingMs + 120);
+      timer.current = setTimeout(finish, remainingMs + 150);
     } catch {
       revert();
       router.refresh();
