@@ -76,7 +76,7 @@ async function finish(
   body: { bankName: string; accountNumber: string; accountName: string },
   r: { request_id: string; balance: number; jackpot_withdrawals_available: number },
 ) {
-  const site = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const site = (process.env.NEXT_PUBLIC_APP_URL || "https://maemoosandy-7mp3.vercel.app").replace(/\/$/, "");
   await notifyAdminLine(
     [
       "💰 คำขอถอนรางวัลแจ็กพอต 5,000 บาท",
