@@ -21,6 +21,7 @@ import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
  */
 export const LUCKY_CARD_COST = 20; // display + optimistic hold only; the server charges from its own constant
 export const LUCKY_CARD_COUNT = 8;
+const LUCKY_CARD_PITY_ROUNDS = 50; // display only; the server/database apply the real guarantee (lucky-card-config.ts PITY_AFTER_DRY_ROUNDS)
 const CARD_BACK_SRC = "/images/card-back-mandala.jpg";
 
 type Phase =
@@ -118,6 +119,8 @@ export function LuckyCardGame({
       <p className="text-sm text-cream-muted">
         เปิดไพ่ 1 ใบจาก {LUCKY_CARD_COUNT} ใบ · รอบละ <b className="text-gold-light">{LUCKY_CARD_COST}</b> เหรียญ · คงเหลือ{" "}
         <b className="text-gold-light">{formatCoins(balance)}</b> เหรียญ
+        <br />
+        <span className="text-xs text-cream-muted/80">ไม่ได้โบนัสติดต่อกัน {LUCKY_CARD_PITY_ROUNDS} รอบ รอบถัดไปการันตีโบนัส 100 เหรียญ</span>
       </p>
 
       {phase.name !== "result" && (
@@ -256,7 +259,9 @@ function ResultView({
 
       {outcome.kind === "bonus" && (
         <>
-          <p className="relative text-xs tracking-widest text-gold/80">โบนัสพิเศษ ระดับ {bonusTier}</p>
+          <p className="relative text-xs tracking-widest text-gold/80">
+            {outcome.guaranteed ? "โบนัสการันตี ✨" : `โบนัสพิเศษ ระดับ ${bonusTier}`}
+          </p>
           <motion.p
             className={"relative font-tarot font-bold text-gold-gradient " + (bonusTier === 3 ? "text-6xl" : bonusTier === 2 ? "text-5xl" : "text-4xl")}
             animate={reduce ? undefined : { scale: bonusTier === 3 ? [1, 1.25, 1, 1.15, 1] : [1, 1.15, 1] }}

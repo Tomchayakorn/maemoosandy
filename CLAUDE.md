@@ -240,7 +240,7 @@ wait for the owner's confirmation before starting the next.
   /topup shows PromptPay 083-779-2265 + copy button. `THUNDER_CHECK_DUPLICATE=false` disables Thunder's own duplicate flag. NOT yet tested with a real slip. The earlier "mock mode" note is superseded.
 
 - **"ดวงดี มีเฮ" lucky card game (code done 2026-11-20, awaiting owner review):** 20 coins/round, flip 1 of 8 cards. Odds/prize live in ONE server-only file `src/lib/lucky-card-config.ts`
-  (weights /10,000: bonus100 150 · bonus300 40 · bonus500 16 · secret 25 · message = rest (9,769) — 70% house profit; `SECRET_PRIZE_THB=1000`, 1,000 coins = 1,000 THB; price + bonus whitelist are also enforced in SQL). `src/lib/lucky-card/draw.ts` draws with crypto;
+  (weights /10,000: SEE `src/lib/lucky-card-config.ts` (current formula 65/35); `SECRET_PRIZE_THB=1000`, 1,000 coins = 1,000 THB; price + bonus whitelist are also enforced in SQL). `src/lib/lucky-card/draw.ts` draws with crypto;
   108 messages in `src/data/lucky-card-messages.ts`. Routes: `POST /api/lucky-card/play` (`{cardIndex}` only → RPC `play_lucky_card`: charge + bonus + secret-prize entitlement + log in one transaction),
   `POST /api/lucky-card/withdraw` (`{prizeId, bank…}` → RPC `request_lucky_card_withdrawal`, prize flips pending→withdrawn once). Secret prize is NOT credited as coins: row in `lucky_card_prizes`;
   "ถอนทีหลัง" prizes are listed on /withdraw (`PendingPrizeList`) and in /admin/withdrawals (`withdrawal_requests.source='lucky_card'`; reject restores the prize). Page `/lucky-card`, home card, `/lucky-card` is a protected prefix.
@@ -250,8 +250,13 @@ wait for the owner's confirmation before starting the next.
 - **Lucky card bonus cash-out (code done 2026-11-20, awaiting owner review):** bonus coins (100/300/500) still go to the main wallet AND add to `wallets.lucky_card_bonus_total` (same RPC statement, same wallet lock).
   Progress bar + "ถอน 1,000 บาท" button on /lucky-card; withdraw = `POST /api/lucky-card/bonus-withdraw` (bank details only) → RPC `request_lucky_card_bonus_withdrawal` (fixed 1,000, idempotent while one is pending;
   partial unique index = one pending per user) → `withdrawal_requests.source='lucky_card_bonus'` + LINE push to admin. Admin approve = counter −1,000 (main balance untouched); reject/cancel = status only.
-  Odds now (per 10,000): 100-coin 222 · 300-coin 16 · 500-coin 1 · secret 5 · message 9,756 → bonus counted twice + secret = 6.0 per 20 (30% back, 70% kept) — `expectedReturnPer20()` in `lucky-card-config.ts`.
+  Odds now (per 10,000): natural 100-coin 8 · 300-coin 55 · 500-coin 1 · secret 2 · message 9,934 + bonus guarantee → bonus counted twice + secret = 7.005 per 20 (35% back, 65% kept; formula 65/35, set 2026-11-20) — `expectedReturnPer20()` in `lucky-card-config.ts`.
   **MIGRATION `0007_lucky_card_bonus_withdrawal.sql` MUST BE RUN after 0006** (also backfills the counter from past plays once). Secret prize "เทพประทานทรัพย์" kept as is.
+
+- **Lucky card bonus guarantee / pity (code done 2026-11-20):** after `PITY_AFTER_DRY_ROUNDS` (50) rounds in a row with no bonus/secret, the next round is a guaranteed 100-coin bonus (`PITY_BONUS_COINS`).
+  Counter `wallets.lucky_card_dry_rounds`; the guarantee is applied INSIDE `play_lucky_card` under the wallet lock (race-free) — the route still draws the natural result and passes `p_pity_after/p_pity_bonus`;
+  if migration **0008_lucky_card_pity.sql** isn't installed yet (PGRST202) the route falls back to the old behaviour (no guarantee). Natural 100-coin weight was lowered to pay for the guarantee (and later for the 0.55% 300-coin tier) so the total stays on target:
+  `expectedReturnPer20()` is the analytic renewal-reward value (7.005 now), pinned by a test; a seeded 1.5M-round simulation test checks ≤50 dry rounds and ~7.0. `resolvePity()` in `lucky-card/draw.ts` is the reference model.
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its

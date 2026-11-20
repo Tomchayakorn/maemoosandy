@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { notifyAdminLine } from "@/lib/line-notify";
-import { LUCKY_CARD_COST, LUCKY_CARD_COUNT, SECRET_PRIZE_THB } from "@/lib/lucky-card-config";
+import { LUCKY_CARD_COST, LUCKY_CARD_COUNT, PITY_AFTER_DRY_ROUNDS, PITY_BONUS_COINS, SECRET_PRIZE_THB } from "@/lib/lucky-card-config";
 import { drawOutcome } from "@/lib/lucky-card/draw";
 import type { LuckyCardPlayResponse } from "@/lib/lucky-card/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -33,29 +33,44 @@ async function play(request: Request) {
   const { data: body, response: bad } = await parseJsonBody(request, Body);
   if (!body) return bad;
 
-  const outcome = drawOutcome();
+  const drawn = drawOutcome();
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("play_lucky_card", {
+  const base = {
     p_user_id: user.id,
     p_cost: LUCKY_CARD_COST,
     p_card_index: body.cardIndex,
-    p_kind: outcome.kind,
-    p_message_id: outcome.kind === "message" ? outcome.messageId : null,
-    p_bonus_coins: outcome.kind === "bonus" ? outcome.coins : 0,
-    p_prize_thb: outcome.kind === "secret" ? SECRET_PRIZE_THB : 0,
-  });
+    p_kind: drawn.kind,
+    p_message_id: drawn.kind === "message" ? drawn.messageId : null,
+    p_bonus_coins: drawn.kind === "bonus" ? drawn.coins : 0,
+    p_prize_thb: drawn.kind === "secret" ? SECRET_PRIZE_THB : 0,
+  };
+  // The bonus guarantee is applied by the database under the wallet lock (migration 0008). If 0008 isn't installed yet the
+  // function with these parameters doesn't exist (PGRST202): fall back to the previous behaviour (no guarantee) so the game keeps working.
+  let { data, error } = await admin.rpc("play_lucky_card", { ...base, p_pity_after: PITY_AFTER_DRY_ROUNDS, p_pity_bonus: PITY_BONUS_COINS });
+  if (error && error.code === "PGRST202") ({ data, error } = await admin.rpc("play_lucky_card", base));
   if (error) return rpcErrorResponse(error);
 
-  const r = data as { play_id: string; balance: number; prize_id: string | null; bonus_total?: number };
-  if (outcome.kind === "secret") {
+  const r = data as {
+    play_id: string;
+    balance: number;
+    prize_id: string | null;
+    bonus_total?: number;
+    kind?: "message" | "bonus" | "secret";
+    bonus_coins?: number;
+    message_id?: string | null;
+    guaranteed?: boolean;
+  };
+  // What was actually applied (the guarantee may have turned a message into a bonus); older RPC = what we drew.
+  const kind = r.kind ?? drawn.kind;
+  if (kind === "secret") {
     await notifyAdminLine(`🎴 ดวงดี มีเฮ: ผู้ใช้ ${user.email ?? user.id} ได้รางวัลลับ "เทพประทานทรัพย์" ${SECRET_PRIZE_THB.toLocaleString("th-TH")} บาท`);
   }
 
   const result: LuckyCardPlayResponse["outcome"] =
-    outcome.kind === "message"
-      ? { kind: "message", messageId: outcome.messageId }
-      : outcome.kind === "bonus"
-        ? { kind: "bonus", coins: outcome.coins }
+    kind === "message"
+      ? { kind: "message", messageId: r.message_id ?? (drawn.kind === "message" ? drawn.messageId : "") }
+      : kind === "bonus"
+        ? { kind: "bonus", coins: (r.bonus_coins || (drawn.kind === "bonus" ? drawn.coins : PITY_BONUS_COINS)) as 100 | 300 | 500, guaranteed: !!r.guaranteed }
         : { kind: "secret", prizeId: r.prize_id ?? "", amountThb: SECRET_PRIZE_THB };
 
   return NextResponse.json<LuckyCardPlayResponse>({ outcome: result, balance: r.balance, bonusTotal: r.bonus_total ?? null, cost: LUCKY_CARD_COST });

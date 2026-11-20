@@ -63,6 +63,8 @@ export type Database = {
           jackpot_withdrawals_available: number;
           /** Accumulated bonus coins won in "ดวงดี มีเฮ" (migration 0007); only an approved bonus withdrawal subtracts 1,000. */
           lucky_card_bonus_total: number;
+          /** Consecutive rounds without a bonus/secret (migration 0008); drives the bonus guarantee. */
+          lucky_card_dry_rounds: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -73,6 +75,7 @@ export type Database = {
           free_reading_tickets?: number;
           jackpot_withdrawals_available?: number;
           lucky_card_bonus_total?: number;
+          lucky_card_dry_rounds?: number;
         };
         Update: {
           balance?: number;
@@ -317,8 +320,10 @@ export type Database = {
           p_message_id: string | null;
           p_bonus_coins: number;
           p_prize_thb: number;
+          p_pity_after?: number;
+          p_pity_bonus?: number;
         };
-        Returns: Json; // { play_id, balance, prize_id, bonus_total }
+        Returns: Json; // { play_id, balance, prize_id, bonus_total, kind, bonus_coins, message_id, guaranteed, dry_rounds }
       };
       request_lucky_card_bonus_withdrawal: {
         Args: { p_user_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
