@@ -17,11 +17,11 @@ export type WheelSegment = {
 
 export const WHEEL_SEGMENTS: readonly WheelSegment[] = [
   { key: "retry_a", type: "none", value: 0, short: "ลองใหม่", label: "ลองใหม่อีกครั้ง", tone: "dim" },
-  { key: "coins_10_a", type: "coins", value: 10, short: "10", label: "10 เหรียญ", tone: "navy" },
-  { key: "coins_20", type: "coins", value: 20, short: "20", label: "20 เหรียญ", tone: "dark" },
+  { key: "coins_25", type: "coins", value: 25, short: "25", label: "25 เหรียญ (คืนครึ่งทุน)", tone: "navy" },
+  { key: "coins_50", type: "coins", value: 50, short: "50", label: "50 เหรียญ (เท่าทุน)", tone: "dark" },
   { key: "retry_b", type: "none", value: 0, short: "ลองใหม่", label: "ลองใหม่อีกครั้ง", tone: "dim" },
-  { key: "coins_10_b", type: "coins", value: 10, short: "10", label: "10 เหรียญ", tone: "navy" },
-  { key: "coins_50", type: "coins", value: 50, short: "50", label: "50 เหรียญ", tone: "gold" },
+  { key: "coins_150", type: "coins", value: 150, short: "150", label: "150 เหรียญ (กำไร 3 เท่า)", tone: "navy" },
+  { key: "coins_500", type: "coins", value: 500, short: "500", label: "500 เหรียญ (กำไร 10 เท่า)", tone: "gold" },
   { key: "free_reading", type: "free_reading", value: 1, short: "ดูดวงฟรี", label: "สิทธิ์ดูดวงฟรี 1 ครั้ง", tone: "dark" },
   { key: "jackpot_5000", type: "coins", value: 5000, short: "5,000", label: "แจ็กพอตใหญ่ 5,000 เหรียญ", tone: "jackpot" },
 ];

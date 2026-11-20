@@ -8,7 +8,7 @@ export const FORTUNE_PRICES = {
 } as const;
 
 /** Coins per lucky-wheel spin once the free spin tickets are used up. Server-side only. */
-export const WHEEL_SPIN_COST = 99;
+export const WHEEL_SPIN_COST = 50; // was 99 until 2026-11-20 (a 50-coin prize = break-even, 25 = half back)
 
 export type FortuneKind = keyof typeof FORTUNE_PRICES;
 

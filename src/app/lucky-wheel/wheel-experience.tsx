@@ -91,7 +91,7 @@ export function WheelExperience({
     setSpinning(false);
     if (res.reward.type !== "none") {
       goldCelebration();
-      if (res.reward.value >= 5000) {
+      if (res.reward.value >= 500) {
         setTimeout(goldCelebration, 700);
         setTimeout(goldCelebration, 1400);
       }
@@ -283,7 +283,7 @@ export function WheelExperience({
       <MysticCard className="w-full px-5 py-4 text-sm text-cream-muted">
         <p className="mb-1 font-serif text-gold-light">รางวัลบนกงล้อ</p>
         <p className="leading-relaxed">
-          โบนัสเหรียญ 10 · 20 · 50 เหรียญ สิทธิ์ดูดวงฟรี และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
+          โบนัสเหรียญ 25 · 50 · 150 · 500 เหรียญ สิทธิ์ดูดวงฟรี และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
           เช็กอินได้วันละ 1 ครั้ง (เวลาไทย) หมุนต่อได้ครั้งละ {WHEEL_SPIN_COST} เหรียญ
         </p>
       </MysticCard>

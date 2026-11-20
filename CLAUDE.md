@@ -28,7 +28,7 @@ daily lucky wheel.
    Clients may only SELECT their own rows, and update `profiles.display_name/avatar_url`.
 2. All balance changes go through the SECURITY DEFINER RPCs in `supabase/migrations/0001_init.sql`,
    which only `service_role` can execute: `spend_coins`, `use_free_reading_ticket`, `refund_coins`,
-   `credit_topup`, `spin_wheel`, `spin_wheel_cycle` (0004: free ticket else 99 coins under the wallet lock + global paid-spin counter + jackpot on #200k; supersedes `spin_wheel_any`), `daily_checkin`.
+   `credit_topup`, `spin_wheel`, `spin_wheel_cycle` (0004: free ticket else WHEEL_SPIN_COST coins under the wallet lock + global paid-spin counter + jackpot on every Nth paid spin; supersedes `spin_wheel_any`), `daily_checkin`.
 3. API routes: verify the user with `getCurrentUser()` (`src/lib/supabase/server.ts`, uses `auth.getUser()`),
    then call RPCs with `createAdminClient()` (`src/lib/supabase/admin.ts`) passing **that** user's id.
    Never accept a user id, price, coin amount or reward from the request body.
@@ -126,7 +126,7 @@ src/
                               # checks.ts = OUR rules (exact amount, receiver is us, ≤24h, not future) — unit-tested;
                               # SLIP_ERROR_MESSAGE = Thai customer messages; failure_reason in DB keeps internal detail
     wheel/segments.ts         # client-safe: 8 WHEEL_SEGMENTS (clockwise from top, index = API segmentIndex) + response types
-    wheel/rewards.ts          # server-only odds: SEGMENT_WEIGHTS (sum 99, jackpot 0), JACKPOT_EVERY_PAID_SPINS=200, resolveSpin() reference model, pickStandardReward() via crypto.randomInt
+    wheel/rewards.ts          # server-only odds: SEGMENT_WEIGHTS (sum 1,000, jackpot 0), JACKPOT_EVERY_PAID_SPINS=1000, expectedReturnPerPaidSpin()/returnRatio(), resolveSpin() reference model, pickStandardReward() via crypto.randomInt
     wheel/wheel.test.ts       # weights sum to 100, agreed odds, roll→segment mapping
   types/database.ts           # DB types + RPC error codes
 supabase/migrations/0001_init.sql
@@ -137,11 +137,12 @@ public/promptpay-qr.jpg         # owner's static PromptPay QR (ttb screenshot, n
 ```
 
 ## Business constants
-- Tarot (3 cards): 99 coins · Birthdate + name: 199 coins · Lucky wheel: 1 free spin ticket, then **99 coins per spin, unlimited** (`WHEEL_SPIN_COST` in `src/lib/pricing.ts`)
+- Tarot (3 cards): 99 coins · Birthdate + name: 199 coins · Lucky wheel: 1 free spin ticket, then **50 coins per spin, unlimited** (was 99 until 2026-11-20) (`WHEEL_SPIN_COST` in `src/lib/pricing.ts`)
 - New user wallet: balance 0, spin_tickets 1
 - Top-up packages: 50฿→50, 99฿→100, 199฿→210, 299฿→330, 499฿→540, 999฿→1,050 coins
-- Wheel odds, ordinary spins (weights sum to 99; jackpot weight 0): 10 coins 35 · 20 coins 20 · 50 coins 5 · free reading ticket 2 · try again 37.
-  **5,000-coin jackpot = every 200th PAID (99-coin) spin, global counter `wheel_state.paid_spin_count`; free-ticket spins never count and never win it** (RPC `spin_wheel_cycle`, migration 0004)
+- Wheel odds, ordinary spins (weights of 1,000; jackpot weight 0): retry 688 (two slices) · 25 coins 230 (23%) · 50 coins 55 (5.5%) · 150 coins 10 (1%) · 500 coins 2 (0.2%) · free reading ticket 15 (1.5%) — 31.2% of ordinary spins win something.
+  **5,000-coin jackpot = every 1,000th PAID (50-coin) spin, global counter `wheel_state.paid_spin_count`; free-ticket spins never count and never win it** (RPC `spin_wheel_cycle`, migration 0004; the cycle length is a parameter, no SQL change needed).
+  Return ≈ 17.5 coins per paid spin (12.5 ordinary + 5.0 jackpot) = **34.9% (owner keeps ≈ 65%)**, free-reading ticket valued at 99 coins; a free-ticket spin costs the owner ≈ 12.5 coins. Check with `returnRatio()` (unit-tested 34–36%).
 - Daily check-in: +1 spin ticket per Bangkok calendar day
 
 ## Design (brand)
@@ -263,6 +264,10 @@ wait for the owner's confirmation before starting the next.
   UI: `BonusWithdrawAction` (shared by /lucky-card and /withdraw): ready → "ถอน 1,000 บาท" + (game only) "เก็บไว้ก่อน / ถอนทีหลัง" (UI-only collapse, counter untouched, reopen any time); pending → "มีรายการขอถอนกำลังรอตรวจสอบ" + disabled button;
   re-syncs on tab focus (router.refresh) so a 2nd tab/device sees pending. /withdraw shows `BonusWithdrawCard` (evidence: remaining total, ready/pending) when total ≥ 1,000 or a request is pending, and history rows carry a source label (`WITHDRAW_SOURCE_LABEL`).
   `lucky-card/bonus-ledger.ts` = pure reference model of the SQL rules, tested for double click / 2 tabs / approve / reject / double review / conservation invariant (the SQL itself is NOT tested against a real DB).
+
+- **Wheel re-priced 2026-11-20 (code done, awaiting owner review):** spin 99 → **50 coins**; prizes 10/20/50 → **25 (half back) / 50 (break-even) / 150 / 500**, free reading + 5,000 jackpot kept; jackpot cycle 200 → 500 → **1,000** paid spins because at a 50-coin price
+  one jackpot per 200 spins alone would return 50% of revenue; 1,000 keeps it at 10% and lets the 25/50 prizes hit ~31% of spins. Weights/EV in `src/lib/wheel/rewards.ts`. No migration needed (the RPC takes cost, prizes ≤ 1,000 and the cycle as parameters).
+  Caveats: the no-migration fallback `spin-direct.ts` ranks paid spins by ledger rows of exactly −cost, so it would restart its count at the new price (production uses the RPC counter `wheel_state`, unaffected).
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 import { spinDirect } from "./spin-direct";
-import { WHEEL_SEGMENTS } from "./segments";
+import { WHEEL_SEGMENTS, type WheelSegment } from "./segments";
 
 type Row = Record<string, unknown>;
 
@@ -59,7 +59,8 @@ function fakeAdmin(initial: { wallet: Row; paidLedgerRows?: number }) {
   return { admin: { from: builder } as never, tables };
 }
 
-const STD = WHEEL_SEGMENTS.find((s) => s.key === "coins_10_a")!;
+// A fixed ordinary prize of its own: these tests are about spinDirect's mechanics, not the live wheel configuration.
+const STD = { key: "coins_10_a", type: "coins", value: 10, short: "10", label: "10 เหรียญ", tone: "navy" } as const satisfies WheelSegment;
 const JACKPOT = WHEEL_SEGMENTS.find((s) => s.key === "jackpot_5000")!;
 const spin = (admin: never) => spinDirect(admin, "u1", STD, JACKPOT, 99, 200);
 

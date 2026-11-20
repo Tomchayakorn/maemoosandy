@@ -11,11 +11,11 @@ import { WHEEL_SEGMENTS, type SpinResponse } from "@/lib/wheel/segments";
 let rpcRetryAt = 0;
 
 /**
- * Spin once (free ticket, else 99 coins). The body is ignored: user, odds, price and reward are all server-side.
+ * Spin once (free ticket, else WHEEL_SPIN_COST coins). The body is ignored: user, odds, price and reward are all server-side.
  *
  * We pre-draw an ORDINARY reward (jackpot excluded). The atomic RPC `spin_wheel_cycle` (migration 0004), or if it is not installed the
  * no-migration fallback in spin-direct.ts, decides
- * free vs paid under the wallet lock, counts paid spins in the database, and on every 200th PAID spin swaps in
+ * free vs paid under the wallet lock, counts paid spins in the database, and on every JACKPOT_EVERY_PAID_SPINS-th PAID spin swaps in
  * the 5,000-coin jackpot. Free-ticket spins never count and can never win it. The counter is never sent to the client.
  */
 export async function POST() {
