@@ -19,6 +19,8 @@ export function PrizeWithdrawForm({
   onDone,
   onCancel,
   onFailed,
+  endpoint,
+  extraBody,
 }: {
   /** A "เทพประทานทรัพย์" prize id; omit it to withdraw the accumulated bonus (1,000 coins = 1,000 THB). */
   prizeId?: string;
@@ -27,6 +29,9 @@ export function PrizeWithdrawForm({
   onCancel?: () => void;
   /** The server refused or the network failed (so the parent can re-sync the real status). */
   onFailed?: () => void;
+  /** Another withdrawal endpoint (e.g. the wheel cash tally) and the fixed extra fields it needs (e.g. { tier }). */
+  endpoint?: string;
+  extraBody?: Record<string, unknown>;
 }) {
   const [bankName, setBankName] = useState<string>(THAI_BANKS[0]);
   const [accountNumber, setAccountNumber] = useState("");
@@ -40,10 +45,10 @@ export function PrizeWithdrawForm({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(prizeId ? "/api/lucky-card/withdraw" : "/api/lucky-card/bonus-withdraw", {
+      const res = await fetch(endpoint ?? (prizeId ? "/api/lucky-card/withdraw" : "/api/lucky-card/bonus-withdraw"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(prizeId ? { prizeId, bankName, accountNumber, accountName } : { bankName, accountNumber, accountName }),
+        body: JSON.stringify({ ...extraBody, ...(prizeId ? { prizeId } : {}), bankName, accountNumber, accountName }),
       });
       const json = (await res.json().catch(() => null)) as LuckyCardWithdrawResponse | { error?: { message?: string } } | null;
       if (!res.ok || !json || !("requestId" in json)) {

@@ -4,20 +4,20 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { GoldButton } from "@/components/ui/GoldButton";
 
-export function ReviewButtons({ id, source = "jackpot", amountThb = 5000 }: { id: string; source?: "jackpot" | "lucky_card" | "lucky_card_bonus"; amountThb?: number }) {
+export function ReviewButtons({ id, source = "jackpot", amountThb = 5000 }: { id: string; source?: "jackpot" | "lucky_card" | "lucky_card_bonus" | "wheel_cash"; amountThb?: number }) {
   const baht = amountThb.toLocaleString("th-TH");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function act(action: "approve" | "reject") {
-    const bonus = source === "lucky_card_bonus";
+    const bonus = source === "lucky_card_bonus" || source === "wheel_cash";
     const msg =
       action === "approve"
         ? bonus
-          ? `ยืนยัน: โอนเงิน ${baht} บาทแล้ว? (ยอดโบนัสสะสมถูกหักไว้แล้วตั้งแต่ตอนผู้ใช้ขอถอน)`
+          ? `ยืนยัน: โอนเงิน ${baht} บาทแล้ว? (ยอดสะสมถูกหักไว้แล้วตั้งแต่ตอนผู้ใช้ขอถอน)`
           : `ยืนยัน: โอนเงิน ${baht} บาทแล้ว และอนุมัติคำขอนี้?`
-        : bonus ? "ยืนยัน: ปฏิเสธคำขอนี้และคืนยอดโบนัสสะสม 1,000 เหรียญให้ผู้ใช้?" : source === "lucky_card" ? `ยืนยัน: ปฏิเสธและคืนสิทธิ์รางวัล ${baht} บาท ให้ผู้ใช้ถอนใหม่ได้?` : "ยืนยัน: ปฏิเสธและคืน 5,000 เหรียญ + สิทธิ์ถอน 1 ครั้งให้ผู้ใช้?";
+        : bonus ? `ยืนยัน: ปฏิเสธคำขอนี้และคืนยอดสะสม ${baht} เหรียญให้ผู้ใช้?` : source === "lucky_card" ? `ยืนยัน: ปฏิเสธและคืนสิทธิ์รางวัล ${baht} บาท ให้ผู้ใช้ถอนใหม่ได้?` : "ยืนยัน: ปฏิเสธและคืน 5,000 เหรียญ + สิทธิ์ถอน 1 ครั้งให้ผู้ใช้?";
     if (!window.confirm(msg)) return;
     setBusy(true);
     setError(null);
@@ -42,7 +42,7 @@ export function ReviewButtons({ id, source = "jackpot", amountThb = 5000 }: { id
     <div className="mt-3 flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         <GoldButton onClick={() => act("approve")} disabled={busy}>อนุมัติ / โอนเงินแล้ว</GoldButton>
-        <GoldButton variant="outline" onClick={() => act("reject")} disabled={busy}>{source === "lucky_card_bonus" ? "ปฏิเสธและคืนยอดสะสม 1,000 เหรียญ" : source === "lucky_card" ? "ปฏิเสธและคืนสิทธิ์รางวัล" : "ปฏิเสธและคืนเหรียญ (5,000 เหรียญ + 1 สิทธิ์)"}</GoldButton>
+        <GoldButton variant="outline" onClick={() => act("reject")} disabled={busy}>{source === "lucky_card_bonus" ? `ปฏิเสธและคืนยอดสะสม ${baht} เหรียญ` : source === "lucky_card" ? "ปฏิเสธและคืนสิทธิ์รางวัล" : "ปฏิเสธและคืนเหรียญ (5,000 เหรียญ + 1 สิทธิ์)"}</GoldButton>
       </div>
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
     </div>

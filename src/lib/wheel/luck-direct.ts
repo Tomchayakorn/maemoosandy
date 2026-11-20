@@ -39,3 +39,25 @@ export async function applyLuckAfterSpin(admin: Admin, userId: string, wonCard: 
   console.error("lucky-wheel direct: could not update luck state", { userId });
   return null;
 }
+
+/**
+ * Cash tally for the no-RPC fallback: add `credit` to wheel_cash_total with a compare-and-swap (same rule as spin_wheel_cycle:
+ * the caller passes 0 for free-ticket spins, the jackpot and non-coin prizes). Returns the new total, or null when the column
+ * doesn't exist (migration 0013 not installed) or the update could not be applied.
+ */
+export async function addWheelCash(admin: Admin, userId: string, credit: number): Promise<number | null> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const { data: w, error } = await admin.from("wallets").select("wheel_cash_total").eq("user_id", userId).maybeSingle();
+    if (error || !w || typeof w.wheel_cash_total !== "number") return null;
+    if (credit <= 0) return w.wheel_cash_total;
+    const { data: updated } = await admin
+      .from("wallets")
+      .update({ wheel_cash_total: w.wheel_cash_total + credit })
+      .eq("user_id", userId)
+      .eq("wheel_cash_total", w.wheel_cash_total)
+      .select("wheel_cash_total");
+    if (updated?.length === 1) return updated[0].wheel_cash_total;
+  }
+  console.error("lucky-wheel direct: could not add to the cash tally", { userId, credit });
+  return null;
+}

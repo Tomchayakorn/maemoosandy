@@ -8,6 +8,7 @@ import { getLocalQuota, shouldUseLocalWithdrawals } from "@/lib/withdrawals-loca
 import { JackpotBanner } from "@/components/withdraw/JackpotBanner";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getMyWallet } from "@/lib/wallet";
+import { smallTierUsage, type CashRequestRow } from "@/lib/wheel/cash";
 
 export const metadata: Metadata = {
   title: "กงล้อมหาเฮง",
@@ -44,10 +45,15 @@ async function WheelGate() {
 
   const supabase = await createClient();
   const today = bangkokToday();
-  const [wallet, checkin] = await Promise.all([
+  const [wallet, checkin, cashRows] = await Promise.all([
     getMyWallet(),
     supabase.from("daily_checkins").select("checkin_date").eq("checkin_date", today).maybeSingle(),
+    // my wheel cash-out requests (RLS: own rows only): pending state + small-tier quota used today / this week
+    supabase.from("withdrawal_requests").select("amount_thb, status, created_at").eq("source", "wheel_cash").order("created_at", { ascending: false }).limit(60),
   ]);
+  const cash = (cashRows.data ?? []) as CashRequestRow[];
+  const cashPending = cash.some((r) => r.status === "pending");
+  const cashUsage = smallTierUsage(cash, new Date());
 
   const admin = createAdminClient();
   const quota = (await shouldUseLocalWithdrawals(admin)) ? await getLocalQuota(user.id) : (wallet?.jackpot_withdrawals_available ?? 0);
@@ -61,6 +67,9 @@ async function WheelGate() {
       initialFreeReadings={wallet?.free_reading_tickets ?? 0}
       initialLuckCards={wallet?.luck_cards ?? 0}
       initialLuckBuffRounds={wallet?.luck_buff_rounds ?? 0}
+      initialWheelCash={typeof wallet?.wheel_cash_total === "number" ? wallet.wheel_cash_total : null}
+      initialCashPending={cashPending}
+      initialCashUsage={cashUsage}
       />
       {quota > 0 && <JackpotBanner count={quota} />}
     </>

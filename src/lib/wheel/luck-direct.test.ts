@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-import { applyLuckAfterSpin, readLuck } from "./luck-direct";
+import { addWheelCash, applyLuckAfterSpin, readLuck } from "./luck-direct";
 
 type Row = Record<string, unknown>;
 
@@ -21,7 +21,7 @@ function fakeAdmin(wallet: Row, opts: { onRead?: (w: Row, n: number) => void } =
         reads++;
         const snapshot = { ...w };
         opts.onRead?.(w, reads); // a concurrent writer may change the row right after we read it
-        return { data: Object.keys(snapshot).includes("luck_cards") ? snapshot : { user_id: "u1", balance: 1 }, error: null };
+        return { data: Object.keys(snapshot).includes("luck_cards") || Object.keys(snapshot).includes("wheel_cash_total") ? snapshot : { user_id: "u1", balance: 1 }, error: null };
       },
       then(resolve: (v: unknown) => void) {
         const hit = filters.every((f) => f(w));
@@ -73,5 +73,21 @@ describe("luck state in the no-RPC fallback", () => {
 
   it("returns null instead of throwing when the columns are missing", async () => {
     expect(await applyLuckAfterSpin(fakeAdmin({ balance: 5 }).admin, "u1", true)).toBeNull();
+  });
+});
+
+describe("cash tally in the no-RPC fallback", () => {
+  it("adds the credit with compare-and-swap and returns the new total", async () => {
+    const { admin, wallet } = fakeAdmin({ wheel_cash_total: 100 });
+    expect(await addWheelCash(admin, "u1", 30)).toBe(130);
+    expect(wallet.wheel_cash_total).toBe(130);
+  });
+  it("credit 0 (free spin / jackpot / no coin prize) only reads the total", async () => {
+    const { admin, wallet } = fakeAdmin({ wheel_cash_total: 100 });
+    expect(await addWheelCash(admin, "u1", 0)).toBe(100);
+    expect(wallet.wheel_cash_total).toBe(100);
+  });
+  it("returns null when the column doesn't exist (migration 0013 missing)", async () => {
+    expect(await addWheelCash(fakeAdmin({ balance: 5 }).admin, "u1", 10)).toBeNull();
   });
 });

@@ -12,12 +12,16 @@ import { FantasyWheel } from "@/components/wheel/FantasyWheel";
 import { SpinFx, type SpinFxState } from "@/components/wheel/SpinFx";
 import { walletBus } from "@/lib/wallet-bus";
 import { wheelSfx, type SweepDir, type WheelFx } from "@/lib/audio/wheelSfx";
+import { WheelCashPanel } from "@/components/wheel/WheelCashPanel";
+import { cashCredit, WHEEL_CASH_PCT } from "@/lib/wheel/cash";
 import { BUFF_MULTIPLIER, BUFF_ROUNDS } from "@/lib/wheel/luck-card";
 import { WHEEL_SEGMENTS, type CheckinResponse, type SpinResponse } from "@/lib/wheel/segments";
 
 const N = WHEEL_SEGMENTS.length;
 const STEP = 360 / N;
 const SPIN_SECONDS = 5;
+/** The prize the luck-card buff boosts (the 400-coin slice) — read from the wheel so the copy never drifts from the prize. */
+const BUFF_PRIZE = WHEEL_SEGMENTS.find((s) => s.key === "coins_400")!.value;
 
 type ApiError = { code: string; message: string };
 
@@ -28,6 +32,9 @@ export function WheelExperience({
   initialFreeReadings,
   initialLuckCards = 0,
   initialLuckBuffRounds = 0,
+  initialWheelCash = null,
+  initialCashPending = false,
+  initialCashUsage = { day: 0, week: 0 },
 }: {
   initialTickets: number;
   initialBalance: number;
@@ -36,6 +43,10 @@ export function WheelExperience({
   /** "การ์ด +ความเฮง" held / rounds left on its buff (from the wallet; 0 if migration 0010 isn't installed) */
   initialLuckCards?: number;
   initialLuckBuffRounds?: number;
+  /** "ยอดสะสมจากการหมุนเกม" (null = migration 0013 not installed → the panel is hidden), a pending cash-out request, and the small-tier quota used */
+  initialWheelCash?: number | null;
+  initialCashPending?: boolean;
+  initialCashUsage?: { day: number; week: number };
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -45,6 +56,7 @@ export function WheelExperience({
   const [luckCards, setLuckCards] = useState(initialLuckCards);
   const [buffRounds, setBuffRounds] = useState(initialLuckBuffRounds);
   const [usingCard, setUsingCard] = useState(false);
+  const [wheelCash, setWheelCash] = useState<number | null>(initialWheelCash);
   const [checkedIn, setCheckedIn] = useState(initialCheckedIn);
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -73,7 +85,7 @@ export function WheelExperience({
   // snapshot that DIFFERS from the last one applied: when a spin ends the props are still the pre-spin snapshot, and re-applying
   // them would overwrite the balance/cards/buff taken from the spin response until the refresh arrives (and briefly re-enable
   // buttons that should be locked, e.g. "ใช้การ์ด" right after the last coins were spent).
-  const synced = useRef({ t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds });
+  const synced = useRef({ t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash });
   useEffect(() => {
     if (spinning || pending.current) return;
     const s = synced.current;
@@ -82,17 +94,19 @@ export function WheelExperience({
       s.b === initialBalance &&
       s.f === initialFreeReadings &&
       s.c === initialLuckCards &&
-      s.r === initialLuckBuffRounds
+      s.r === initialLuckBuffRounds &&
+      s.w === initialWheelCash
     ) {
       return;
     }
-    synced.current = { t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds };
+    synced.current = { t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash };
     setTickets(initialTickets);
     setBalance(initialBalance);
     setFreeReadings(initialFreeReadings);
     setLuckCards(initialLuckCards);
     setBuffRounds(initialLuckBuffRounds);
-  }, [initialTickets, initialBalance, initialFreeReadings, initialLuckCards, initialLuckBuffRounds, spinning]);
+    setWheelCash(initialWheelCash);
+  }, [initialTickets, initialBalance, initialFreeReadings, initialLuckCards, initialLuckBuffRounds, initialWheelCash, spinning]);
 
   // Never leave the header badge frozen if the page is left mid-spin.
   useEffect(() => {
@@ -113,6 +127,7 @@ export function WheelExperience({
     setFreeReadings(res.freeReadingTickets);
     if (res.luckCards !== undefined) setLuckCards(res.luckCards);
     if (res.luckBuffRounds !== undefined) setBuffRounds(res.luckBuffRounds);
+    if (res.wheelCashTotal !== undefined) setWheelCash(res.wheelCashTotal);
     // the buff ran its last round on this spin: effects switch off (they follow buffRounds) and say so
     if (res.buffApplied && res.luckBuffRounds === 0) setNotice("บัฟ +ความเฮง ครบ 3 รอบแล้ว สิ้นสุดแล้ว ✨");
     walletBus.release(res.balance); // header badge: reveal the final balance together with the prize modal
@@ -120,7 +135,7 @@ export function WheelExperience({
     setSpinning(false);
     if (res.reward.type !== "none") {
       goldCelebration();
-      if (res.reward.value >= 500) {
+      if (res.reward.value >= 400) {
         setTimeout(goldCelebration, 700);
         setTimeout(goldCelebration, 1400);
       }
@@ -241,7 +256,7 @@ export function WheelExperience({
       const res = body as { luckCards: number; luckBuffRounds: number };
       setLuckCards(res.luckCards);
       setBuffRounds(res.luckBuffRounds);
-      setNotice(`เปิดบัฟ +ความเฮง แล้ว ✨ เพิ่มโอกาสได้ 500 เหรียญ ${BUFF_ROUNDS} รอบถัดไป`);
+      setNotice(`เปิดบัฟ +ความเฮง แล้ว ✨ การันตีได้รางวัลทุกตา ${BUFF_ROUNDS} รอบถัดไป + เพิ่มโอกาสได้ ${BUFF_PRIZE} เหรียญ ${Math.round((BUFF_MULTIPLIER - 1) * 100)}%`);
       router.refresh();
     } catch {
       setError("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้งนะคะ");
@@ -331,11 +346,11 @@ export function WheelExperience({
           )}
           {buffRounds > 0 ? (
             <p data-testid="buff-status" role="status" className="text-sm text-gold-light">
-              ✨ กำลังใช้บัฟ +ความเฮง ลุ้น 500 เหรียญ · เหลือ {buffRounds}/{BUFF_ROUNDS} รอบ (โอกาสเพิ่มขึ้น {Math.round((BUFF_MULTIPLIER - 1) * 100)}%)
+              ✨ กำลังใช้บัฟ +ความเฮง · การันตีได้รางวัลทุกตา + ลุ้น {BUFF_PRIZE} เหรียญ (+{Math.round((BUFF_MULTIPLIER - 1) * 100)}%) · เหลือ {buffRounds}/{BUFF_ROUNDS} รอบ
             </p>
           ) : (
             <p className="text-xs text-cream-muted">
-              กด “ใช้การ์ด” เพื่อเพิ่มโอกาสได้ 500 เหรียญอีก {Math.round((BUFF_MULTIPLIER - 1) * 100)}% นาน {BUFF_ROUNDS} รอบที่หมุนถัดไป
+              กด “ใช้การ์ด” เพื่อ การันตีได้รางวัลทุกตาตลอด {BUFF_ROUNDS} รอบ + เพิ่มโอกาสได้ {BUFF_PRIZE} เหรียญอีก {Math.round((BUFF_MULTIPLIER - 1) * 100)}%
             </p>
           )}
         </div>
@@ -350,7 +365,7 @@ export function WheelExperience({
           seconds={seconds}
           spinning={spinning}
           onComplete={finish}
-          highlightKey={buffRounds > 0 ? "coins_500" : undefined}
+          highlightKey={buffRounds > 0 ? "coins_400" : undefined}
         />
       </div>
 
@@ -396,10 +411,12 @@ export function WheelExperience({
         {error && <p role="alert" className="text-center text-sm text-ruby">{error}</p>}
       </div>
 
+      {wheelCash !== null && <WheelCashPanel total={wheelCash} pending={initialCashPending} usage={initialCashUsage} />}
+
       <MysticCard className="w-full px-5 py-4 text-sm text-cream-muted">
         <p className="mb-1 font-serif text-gold-light">รางวัลบนกงล้อ</p>
         <p className="leading-relaxed">
-          โบนัสเหรียญ 25 · 50 · 150 · 500 เหรียญ สิทธิ์ดูดวงฟรี การ์ด +ความเฮง (กดใช้แล้วเพิ่มโอกาสได้ 500 เหรียญอีก 30% นาน 3 รอบที่หมุนถัดไป ใช้ได้เมื่อมีเหรียญพอหมุนหรือมีสิทธิ์หมุนฟรี) และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
+          โบนัสเหรียญ 20 · 40 · 120 · 400 เหรียญ สิทธิ์ดูดวงฟรี การ์ด +ความเฮง (กดใช้แล้วการันตีได้รางวัลทุกตาตลอด 3 รอบที่หมุนถัดไป + เพิ่มโอกาสได้ 400 เหรียญอีก 30% ใช้ได้เมื่อมีเหรียญพอหมุนหรือมีสิทธิ์หมุนฟรี) และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
           เช็กอินได้วันละ 1 ครั้ง (เวลาไทย) หมุนต่อได้ครั้งละ {WHEEL_SPIN_COST} เหรียญ
         </p>
       </MysticCard>
@@ -446,7 +463,7 @@ export function WheelExperience({
                       {result.reward.type === "coins"
                         ? `ยอดเหรียญคงเหลือ ${result.balance.toLocaleString("th-TH")} เหรียญ`
                         : result.reward.type === "luck_card"
-                          ? `ได้รับ 1 ใบ ตอนนี้มีการ์ด ${result.luckCards ?? luckCards} ใบ กด “ใช้การ์ด” เพื่อเพิ่มโอกาสได้ 500 เหรียญอีก ${Math.round((BUFF_MULTIPLIER - 1) * 100)}% นาน ${BUFF_ROUNDS} รอบที่หมุนถัดไป`
+                          ? `ได้รับ 1 ใบ ตอนนี้มีการ์ด ${result.luckCards ?? luckCards} ใบ กด “ใช้การ์ด” เพื่อการันตีได้รางวัลทุกตาตลอด ${BUFF_ROUNDS} รอบ + เพิ่มโอกาสได้ ${BUFF_PRIZE} เหรียญอีก ${Math.round((BUFF_MULTIPLIER - 1) * 100)}%`
                           : `สิทธิ์ดูดวงฟรีคงเหลือ ${result.freeReadingTickets} ครั้ง ใช้ได้ที่หน้าไพ่ยิปซีและดวงวันเกิด`}
                     </p>
                   </>
@@ -454,6 +471,11 @@ export function WheelExperience({
                 {result.reward.type === "luck_card" && result.spinTickets < 1 && result.balance < WHEEL_SPIN_COST && (
                   <p data-testid="card-saved-note" className="text-xs text-gold-light">
                     การ์ดเก็บเข้าคลังแล้ว ✨ เติมเหรียญอย่างน้อย {WHEEL_SPIN_COST} เหรียญ แล้วค่อยกด “ใช้การ์ด” ได้เลยค่ะ
+                  </p>
+                )}
+                {result.paid && result.reward.type === "coins" && result.reward.value < 5000 && cashCredit(result.reward.value) > 0 && (
+                  <p data-testid="cash-credit-note" className="text-xs text-gold-light">
+                    + {cashCredit(result.reward.value)} เหรียญเข้ายอดสะสมถอนเงิน ({WHEEL_CASH_PCT}% ของรางวัล) · ไม่ใช่เหรียญในกระเป๋า
                   </p>
                 )}
                 {result.buffApplied && (

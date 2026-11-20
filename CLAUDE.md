@@ -140,9 +140,9 @@ public/promptpay-qr.jpg         # owner's static PromptPay QR (ttb screenshot, n
 - Tarot (3 cards): 99 coins · Birthdate + name: 199 coins · Lucky wheel: 1 free spin ticket, then **50 coins per spin, unlimited** (was 99 until 2026-11-20) (`WHEEL_SPIN_COST` in `src/lib/pricing.ts`)
 - New user wallet: balance 0, spin_tickets 1
 - Top-up packages: 50฿→50, 99฿→100, 199฿→210, 299฿→330, 499฿→540, 999฿→1,050 coins
-- Wheel odds, ordinary spins (weights of 10,000; jackpot weight 0): retry 6,730 · 25 coins 2,300 (23%) · 50 coins 550 (5.5%) · "การ์ด +ความเฮง" 150 (1.5%) · 150 coins 100 (1%) · 500 coins 20 (0.2%) · free reading ticket 150 (1.5%) — 31.2% of spins win coins/free reading, 32.7% incl. the card.
+- Wheel odds, ordinary spins (weights of 10,000; jackpot weight 0): retry 7,030 · **20 coins** 2,000 (20%) · **40 coins** 550 (5.5%) · "การ์ด +ความเฮง" 150 (1.5%) · **120 coins** 100 (1%) · **400 coins** 20 (0.2%) · free reading ticket 150 (1.5%) — 29.7% of normal spins win something. (Prizes were 25/50/150/500 until 2026-11-21; scaled ×0.8 when the cash tally was added.)
   **5,000-coin jackpot = every 1,000th PAID (50-coin) spin, global counter `wheel_state.paid_spin_count`; free-ticket spins never count and never win it** (RPC `spin_wheel_cycle`, migration 0004; the cycle length is a parameter, no SQL change needed).
-  Return ≈ 17.49 coins per paid spin (12.49 ordinary incl. 0.9×1.5% for the card + 5.0 jackpot) = **35.0% (owner keeps ≈ 65%)**, free-reading ticket valued at 99 coins; a free-ticket spin costs the owner ≈ 12.5 coins. Check with `returnRatio()` (unit-tested 34–36%).
+  Return ≈ 17.53 coins per paid spin (12.5 ordinary incl. 1.5% × ~54-coin luck card + 5.0 jackpot) = **35.05% (owner keeps ≈ 65%)** — coin prizes are counted ×1.25 (wallet + the 25% cash tally, all assumed cashed out), free-reading ticket valued at 99 coins; a free-ticket spin costs the owner ≈ 12.5 coins. Check with `returnRatio()` (unit-tested 34–36%).
 - Daily check-in: +1 spin ticket per Bangkok calendar day
 
 ## Design (brand)
@@ -282,6 +282,16 @@ wait for the owner's confirmation before starting the next.
   Fixes: (1) migration **0011_wheel_state_ensure.sql** (create-if-missing + seed counter from paid-spin ledger rows; idempotent) — RUN IT; (2) the fallback is now luck-aware (`src/lib/wheel/luck-direct.ts`: reads the buff, uses the buffed draw, then
   decrements the buff / adds a won card with a compare-and-swap); (3) the route now `console.error`s whenever it falls back (check Vercel logs). UI: while the buff runs the wheel shows a golden aura, the 500-coin slice pulses (`highlightKey`), the panel glows and says
   "กำลังใช้บัฟ +ความเฮง ลุ้น 500 เหรียญ · เหลือ n/3 รอบ"; after the 3rd spin all of it switches off and a notice says the buff ended. State always comes from the latest spin response.
+
+- **Luck-card buff v2 — every buffed spin wins (2026-11-21, awaiting owner review):** while `luck_buff_rounds > 0` the buffed draw has NO "retry": retry → 0, 500-coin ×1.3 (20 → 26), the freed weight goes to the 25-coin prize (25 = 90.2% of a buffed spin; spreading it proportionally would return ~78% of the price).
+  A card is now worth ≈ 53.6 coins (`luckCardValueCoins()`, closed form incl. cards won during a buff); to stay at ~35% the normal 25-coin weight was lowered 23% → 20%. Enforced in 3 places: `buffedWeights()` + a route guard, and the DB — migration **0012_luck_buff_no_retry.sql**
+  (replaces `spin_wheel_cycle`: a buffed reward of type 'none' → INVALID_REWARD, and a running buff requires a buffed reward to be passed). Run 0012 after 0011. UI copy: "การันตีได้รางวัลทุกตาตลอด 3 รอบ + เพิ่มโอกาสได้ 500 เหรียญ 30%".
+
+- **Wheel cash tally + tiered cash-out (code done 2026-11-21, awaiting owner review):** `wallets.wheel_cash_total` = "ยอดสะสมจากการหมุนเกม", separate from the main wallet. Every PAID, non-jackpot spin that wins coins adds **25%** of the prize (`WHEEL_CASH_PCT`, integer floor) in the same statement as the prize
+  (`spin_wheel_cycle` 13th param `p_cash_pct`); free-ticket spins and the jackpot never add. Cash-out: **500 tally = 500 THB** (small tier, quota **1 per Bangkok day and 3 per week**, pending+approved count, rejected frees the slot) and **5,000 = 5,000 THB** (big tier, no quota, admin approves).
+  `POST /api/lucky-wheel/cash-withdraw` (`{tier, bank…}`) → RPC `request_wheel_cash_withdrawal`: wallet FOR UPDATE, one pending request per user (idempotent, partial unique index), needs tally ≥ tier, RESERVES the tier at once (rejected → tally back); `withdrawal_requests.source='wheel_cash'`, `bonus_reserved=true`.
+  The existing jackpot cash-out (jackpot_withdrawals_available) is a separate flow and unchanged. Migration **0013_wheel_cash_tally.sql** (run after 0012; no backfill — tally starts at 0). Constants/rules/reference model: `src/lib/wheel/cash.ts` (unit-tested incl. Bangkok day/week boundaries). UI: `WheelCashPanel` (tally, two progress bars 500/5,000, quota left, pending state, withdraw buttons) + a "+N เข้ายอดสะสม" note in the spin result.
+  No-RPC fallback also adds to the tally (`addWheelCash`). The buff copy now says 400 (the boosted slice). EV: unchanged 35.05% because prizes ×0.8 and the tally adds ×0.25 (the budget counts every tally coin as cashed out; the real cost is lower because unwithdrawn residue is kept).
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its

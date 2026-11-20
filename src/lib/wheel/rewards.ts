@@ -1,6 +1,7 @@
 import "server-only";
 import { randomInt } from "node:crypto";
 import { WHEEL_SPIN_COST } from "../pricing";
+import { WHEEL_CASH_PCT } from "./cash";
 import { BUFF_MULTIPLIER, BUFF_ROUNDS } from "./luck-card";
 import { WHEEL_SEGMENTS } from "./segments";
 
@@ -10,11 +11,13 @@ import { WHEEL_SEGMENTS } from "./segments";
  * the database on every JACKPOT_EVERY_PAID_SPINS-th PAID spin (RPC `spin_wheel_cycle`),
  * and never for a free-ticket spin.
  *
- *  retry 67.3% · 25 coins 23% · 50 coins 5.5% · "การ์ด +ความเฮง" 1.5% · 150 coins 1% · 500 coins 0.2% · free reading 1.5%
- *  (31.2% of spins win a coin prize or the free reading; 32.7% win something including the card)
+ *  retry 70.3% · 20 coins 20% · 40 coins 5.5% · "การ์ด +ความเฮง" 1.5% · 120 coins 1% · 400 coins 0.2% · free reading 1.5%
+ *  (29.7% of normal spins win something, the card included)
  *
- * While the luck-card buff is active the 500-coin weight is multiplied by BUFF_MULTIPLIER (see buffedWeights): the extra weight is
- * taken from "retry" only, so the 25/50/150 chances stay exactly the same.
+ * While the luck-card buff is active the draw changes (see buffedWeights): "retry" is REMOVED (every spin of the buff wins something),
+ * the 400-coin weight is multiplied by BUFF_MULTIPLIER, and all the weight "retry" used to have goes to the cheapest prize (20 coins).
+ * 40/120/card/free-reading keep their weights. Giving the freed weight to 25 keeps the buff affordable; spreading it proportionally would
+ * make a buffed spin return ~78% of its price.
  *
  * With WHEEL_SPIN_COST = 50 and the jackpot every 1,000th paid spin, the long-run return is ≈ 17.5 coins per paid spin
  * ≈ 35% (owner keeps ≈ 65%); see expectedReturnPerPaidSpin(). The free reading ticket is valued at FREE_READING_VALUE_COINS and a
@@ -22,21 +25,26 @@ import { WHEEL_SEGMENTS } from "./segments";
  *
  * NEVER import this from client code — the client only gets segments.ts.
  */
-export const SEGMENT_WEIGHTS: readonly number[] = [6730, 2300, 550, 150, 100, 20, 150, 0];
+export const SEGMENT_WEIGHTS: readonly number[] = [7030, 2000, 550, 150, 100, 20, 150, 0];
 
 export const TOTAL_WEIGHT = SEGMENT_WEIGHTS.reduce((a, b) => a + b, 0);
 
 const SEGMENT_INDEX = (key: string) => WHEEL_SEGMENTS.findIndex((s) => s.key === key);
 
-/** Weights while the luck-card buff is active: 500-coin × BUFF_MULTIPLIER, the difference comes out of "retry". Total unchanged. */
+/**
+ * Weights while the luck-card buff is active (total unchanged): "retry" → 0 (every buffed spin wins), 400-coin × BUFF_MULTIPLIER,
+ * and the weight "retry" had (minus what the 400-coin boost needs) goes to the 20-coin prize. Everything else is untouched.
+ */
 export function buffedWeights(): readonly number[] {
   const w = [...SEGMENT_WEIGHTS];
-  const i500 = SEGMENT_INDEX("coins_500");
+  const i500 = SEGMENT_INDEX("coins_400");
   const iRetry = SEGMENT_INDEX("retry_a");
+  const i20 = SEGMENT_INDEX("coins_20");
   const extra = Math.round(w[i500] * (BUFF_MULTIPLIER - 1));
   if (extra > w[iRetry]) throw new RangeError("not enough retry weight to fund the luck-card buff");
+  w[i20] += w[iRetry] - extra;
   w[i500] += extra;
-  w[iRetry] -= extra;
+  w[iRetry] = 0;
   return w;
 }
 
@@ -89,27 +97,42 @@ export function pickStandardReward(opts: { buffed?: boolean } = {}) {
 }
 
 /**
- * Average value of ONE luck card in coins: BUFF_ROUNDS spins with the 500-coin chance raised from w to buffed w.
- * (Assumes the card is always used and the buff always runs its full length.)
+ * What one PAID spin returns on average with these weights; luck cards excluded. Coin prizes count (1 + WHEEL_CASH_PCT/100) times:
+ * the coins go to the wallet AND WHEEL_CASH_PCT % of them also go to the cash tally (withdrawable at 1 : 1 — the budget assumes every
+ * tally coin is eventually cashed out; jackpot spins are excluded from the tally but are a tiny share). Free-reading tickets at their
+ * nominal value.
+ */
+function coinsEv(weights: readonly number[]): number {
+  let ev = 0;
+  WHEEL_SEGMENTS.forEach((s, i) => {
+    const p = weights[i] / TOTAL_WEIGHT;
+    if (s.type === "coins") ev += p * s.value * (1 + WHEEL_CASH_PCT / 100);
+    else if (s.type === "free_reading") ev += p * s.value * FREE_READING_VALUE_COINS;
+  });
+  return ev;
+}
+
+/**
+ * Average value of ONE luck card in coins: it turns BUFF_ROUNDS normal spins into buffed spins, so
+ *   V = BUFF_ROUNDS · (EV_buffed − EV_normal) / (1 − BUFF_ROUNDS · (pCard_buffed − pCard_normal)).
+ * The denominator accounts for cards won during a buff (they start another buff later). Assumes every card is used.
  */
 export function luckCardValueCoins(): number {
-  const i500 = SEGMENT_INDEX("coins_500");
-  const extraChance = (buffedWeights()[i500] - SEGMENT_WEIGHTS[i500]) / TOTAL_WEIGHT;
-  return BUFF_ROUNDS * extraChance * WHEEL_SEGMENTS[i500].value;
+  const iCard = WHEEL_SEGMENTS.findIndex((s) => s.type === "luck_card");
+  const base = SEGMENT_WEIGHTS;
+  const buffed = buffedWeights();
+  const gain = coinsEv(buffed) - coinsEv(base);
+  const chain = (buffed[iCard] - base[iCard]) / TOTAL_WEIGHT;
+  return (BUFF_ROUNDS * gain) / (1 - BUFF_ROUNDS * chain);
 }
 
 /**
  * Long-run expected return per PAID spin, in coins. The jackpot replaces the ordinary result on every Nth paid spin, so
- * EV = (1 − 1/N) · ordinary + jackpot / N. Free-reading tickets are valued at FREE_READING_VALUE_COINS, luck cards at luckCardValueCoins().
+ * EV = (1 − 1/N) · ordinary + jackpot / N, with ordinary = normal-spin coins + P(card) · luckCardValueCoins().
  */
 export function expectedReturnPerPaidSpin(every = JACKPOT_EVERY_PAID_SPINS): { ordinary: number; jackpot: number; total: number } {
-  let ordinary = 0;
-  WHEEL_SEGMENTS.forEach((s, i) => {
-    const p = SEGMENT_WEIGHTS[i] / TOTAL_WEIGHT;
-    if (s.type === "coins") ordinary += p * s.value;
-    else if (s.type === "free_reading") ordinary += p * s.value * FREE_READING_VALUE_COINS;
-    else if (s.type === "luck_card") ordinary += p * s.value * luckCardValueCoins();
-  });
+  const iCard = WHEEL_SEGMENTS.findIndex((s) => s.type === "luck_card");
+  const ordinary = coinsEv(SEGMENT_WEIGHTS) + (SEGMENT_WEIGHTS[iCard] / TOTAL_WEIGHT) * luckCardValueCoins();
   const jackpotValue = WHEEL_SEGMENTS[JACKPOT_SEGMENT_INDEX].value;
   const jackpot = jackpotValue / every;
   const ordinaryShare = (1 - 1 / every) * ordinary;

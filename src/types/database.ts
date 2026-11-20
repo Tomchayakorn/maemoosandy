@@ -69,6 +69,8 @@ export type Database = {
           luck_cards: number;
           /** rounds left on the +ความเฮง buff */
           luck_buff_rounds: number;
+          /** "ยอดสะสมจากการหมุนเกม" (migration 0013): tally of 25% of coin prizes won on paid spins; a withdrawal ticket, not wallet coins */
+          wheel_cash_total: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -82,6 +84,7 @@ export type Database = {
           lucky_card_dry_rounds?: number;
           luck_cards?: number;
           luck_buff_rounds?: number;
+          wheel_cash_total?: number;
         };
         Update: {
           balance?: number;
@@ -89,6 +92,9 @@ export type Database = {
           free_reading_tickets?: number;
           jackpot_withdrawals_available?: number;
           lucky_card_bonus_total?: number;
+          luck_cards?: number;
+          luck_buff_rounds?: number;
+          wheel_cash_total?: number;
         };
         Relationships: [];
       };
@@ -209,7 +215,7 @@ export type Database = {
           account_name: string;
           status: WithdrawalStatus;
           ledger_id: string | null;
-          source: "jackpot" | "lucky_card" | "lucky_card_bonus";
+          source: "jackpot" | "lucky_card" | "lucky_card_bonus" | "wheel_cash";
           prize_id: string | null;
           /** true while a lucky_card_bonus request holds 1,000 reserved coins (migration 0009) */
           bonus_reserved: boolean;
@@ -311,8 +317,21 @@ export type Database = {
           p_buff_reward_key?: string;
           p_buff_reward_type?: RewardType;
           p_buff_reward_value?: number;
+          p_cash_pct?: number;
         };
         Returns: Json; // { spin_log_id, paid, jackpot, paid_spin_number, reward_key, balance, spin_tickets, free_reading_tickets }
+      };
+      request_wheel_cash_withdrawal: {
+        Args: {
+          p_user_id: string;
+          p_tier: number;
+          p_bank_name: string;
+          p_account_number: string;
+          p_account_name: string;
+          p_daily_limit: number;
+          p_weekly_limit: number;
+        };
+        Returns: Json; // { request_id, amount_thb, wheel_cash_total, already_pending }
       };
       use_luck_card: {
         Args: { p_user_id: string; p_rounds?: number; p_min_balance?: number };
@@ -391,6 +410,10 @@ export const RPC_ERRORS = [
   "BONUS_NOT_ENOUGH",
   "NO_LUCK_CARDS",
   "BUFF_ALREADY_ACTIVE",
+  "WHEEL_CASH_NOT_ENOUGH",
+  "WHEEL_CASH_DAILY_LIMIT",
+  "WHEEL_CASH_WEEKLY_LIMIT",
+  "INVALID_TIER",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

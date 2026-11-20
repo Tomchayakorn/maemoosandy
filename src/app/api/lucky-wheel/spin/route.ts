@@ -4,7 +4,8 @@ import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { WHEEL_SPIN_COST } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { JACKPOT_EVERY_PAID_SPINS, JACKPOT_SEGMENT_INDEX, pickStandardReward } from "@/lib/wheel/rewards";
-import { applyLuckAfterSpin, readLuck } from "@/lib/wheel/luck-direct";
+import { WHEEL_CASH_PCT, cashCredit } from "@/lib/wheel/cash";
+import { addWheelCash, applyLuckAfterSpin, readLuck } from "@/lib/wheel/luck-direct";
 import { spinDirect } from "@/lib/wheel/spin-direct";
 import { WHEEL_SEGMENTS, type SpinResponse, type WheelSegment } from "@/lib/wheel/segments";
 
@@ -33,8 +34,8 @@ const RETRY = WHEEL_SEGMENTS.find((s) => s.key === "retry_a")!;
 const isMissingFn = (e: { code?: string }) => e.code === "PGRST202" || e.code === "42883" || e.code === "42P01";
 /** Before migration 0010 the database does not know the 'luck_card' reward type: such a draw becomes "retry" instead of failing. */
 const legacySafe = (seg: WheelSegment): WheelSegment => (seg.type === "luck_card" ? RETRY : seg);
-/** When migration 0010 (luck cards) is missing, skip the new-signature call for a minute instead of trying it on every spin. */
-let luckSigMissingUntil = 0;
+/** Signatures tried in order: 13 args (0013: cash tally) → 12 args (0010/0012: luck cards) → 9 args (legacy). A missing one is skipped for a minute. */
+const sigMissingUntil = [0, 0];
 
 type Row = {
   paid: boolean;
@@ -46,6 +47,7 @@ type Row = {
   luckCards?: number;
   luckBuffRounds?: number;
   buffApplied?: boolean;
+  wheelCashTotal?: number;
 };
 
 async function spin() {
@@ -57,14 +59,17 @@ async function spin() {
   // Two ordinary draws (crypto): normal odds and luck-card-buffed odds. The database decides under the wallet lock which one
   // applies (the buff is stored per player), so the client can never choose and two tabs can't both use the same buff round.
   const standard = pickStandardReward();
-  const buffed = pickStandardReward({ buffed: true });
+  const drawnBuffed = pickStandardReward({ buffed: true });
+  // Buff rule: a buffed spin never ends as "retry" (buffedWeights has no retry; the database refuses one too). Belt and braces:
+  const buffedSegment: WheelSegment =
+    drawnBuffed.segment.type === "none" ? WHEEL_SEGMENTS.find((s) => s.key === "coins_20")! : drawnBuffed.segment;
   const jackpot = WHEEL_SEGMENTS[JACKPOT_SEGMENT_INDEX];
 
   const admin = createAdminClient();
   let row: Row | null = null;
   let usedStandard: WheelSegment = standard.segment;
 
-  const call = (std: WheelSegment, buff?: WheelSegment) =>
+  const call = (std: WheelSegment, buff?: WheelSegment, cash = false) =>
     admin.rpc("spin_wheel_cycle", {
       p_user_id: user.id,
       p_cost: WHEEL_SPIN_COST,
@@ -76,17 +81,21 @@ async function spin() {
       p_jackpot_type: jackpot.type,
       p_jackpot_value: jackpot.value,
       ...(buff ? { p_buff_reward_key: buff.key, p_buff_reward_type: buff.type, p_buff_reward_value: buff.value } : {}),
+      ...(cash ? { p_cash_pct: WHEEL_CASH_PCT } : {}),
     });
 
   if (Date.now() >= rpcRetryAt) {
     let res: Awaited<ReturnType<typeof call>> | null = null;
-    if (Date.now() >= luckSigMissingUntil) {
-      res = await call(standard.segment, buffed.segment);
-      if (res.error && isMissingFn(res.error)) {
-        luckSigMissingUntil = Date.now() + 60_000; // migration 0010 not installed: fall back to the 0005 function
-        console.error("lucky-wheel: spin_wheel_cycle (luck-card signature) unavailable", { code: res.error.code, message: res.error.message });
-        res = null;
+    for (const [i, withCash] of [[0, true], [1, false]] as const) {
+      if (Date.now() < sigMissingUntil[i]) continue;
+      const attempt = await call(standard.segment, buffedSegment, withCash);
+      if (attempt.error && isMissingFn(attempt.error)) {
+        sigMissingUntil[i] = Date.now() + 60_000; // that migration isn't installed: try the next older signature
+        console.error("lucky-wheel: spin_wheel_cycle signature unavailable", { withCash, code: attempt.error.code, message: attempt.error.message });
+        continue;
       }
+      res = attempt;
+      break;
     }
     if (!res) {
       usedStandard = legacySafe(standard.segment);
@@ -104,6 +113,7 @@ async function spin() {
         luck_cards?: number;
         luck_buff_rounds?: number;
         buff_applied?: boolean;
+        wheel_cash_total?: number;
       };
       if (r.jackpot && (data as { jackpot_withdrawals_available?: number }).jackpot_withdrawals_available === undefined) {
         // migration 0005 not installed: the jackpot was paid but no withdrawal quota was granted
@@ -119,6 +129,7 @@ async function spin() {
         luckCards: r.luck_cards,
         luckBuffRounds: r.luck_buff_rounds,
         buffApplied: r.buff_applied,
+        wheelCashTotal: r.wheel_cash_total,
       };
     } else if (isMissingFn(error)) {
       // NOT silent: this path knows nothing about wheel_state/luck cards. 42P01 = a table the RPC needs is missing (run migration 0011).
@@ -133,7 +144,7 @@ async function spin() {
     // No-RPC fallback. It must still honour the luck-card buff, otherwise luck_buff_rounds never counts down.
     const luck = await readLuck(admin, user.id); // null = luck columns don't exist (migration 0010 missing)
     const buffActive = (luck?.buff ?? 0) > 0;
-    usedStandard = luck === null ? legacySafe(standard.segment) : buffActive ? buffed.segment : standard.segment;
+    usedStandard = luck === null ? legacySafe(standard.segment) : buffActive ? buffedSegment : standard.segment;
     const direct = await spinDirect(admin, user.id, usedStandard, jackpot, WHEEL_SPIN_COST, JACKPOT_EVERY_PAID_SPINS);
     if (direct.error) return rpcErrorResponse(direct.error);
     row = direct.data;
@@ -141,6 +152,10 @@ async function spin() {
       const after = await applyLuckAfterSpin(admin, user.id, !row.jackpot && usedStandard.type === "luck_card");
       if (after) row = { ...row, luckCards: after.cards, luckBuffRounds: after.buff };
       row = { ...row, buffApplied: buffActive };
+      // cash tally (paid, non-jackpot coin prizes only) — same rule as the SQL; null if migration 0013 isn't installed
+      const credit = row.paid && !row.jackpot && usedStandard.type === "coins" ? cashCredit(usedStandard.value) : 0;
+      const tally = await addWheelCash(admin, user.id, credit);
+      if (tally !== null) row = { ...row, wheelCashTotal: tally };
     }
   }
 
@@ -162,6 +177,7 @@ async function spin() {
     luckCards: row.luckCards,
     luckBuffRounds: row.luckBuffRounds,
     buffApplied: row.buffApplied,
+    wheelCashTotal: row.wheelCashTotal,
     paid: row.paid,
     cost: row.paid ? WHEEL_SPIN_COST : 0,
   });

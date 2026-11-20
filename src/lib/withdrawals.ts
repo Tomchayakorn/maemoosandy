@@ -13,6 +13,7 @@ export const WITHDRAW_SOURCE_LABEL = {
   jackpot: "ถอนรางวัลแจ็กพอตกงล้อ (5,000 เหรียญ = 5,000 บาท)",
   lucky_card: "ถอนรางวัลลับ “เทพประทานทรัพย์” (ดวงดี มีเฮ)",
   lucky_card_bonus: "ถอนโบนัสสะสม 1,000 เหรียญ = 1,000 บาท (ดวงดี มีเฮ)",
+  wheel_cash: "ถอนยอดสะสมจากกงล้อ (ขั้น 500 / 5,000 เหรียญ = บาท)",
 } as const;
 export type WithdrawSource = keyof typeof WITHDRAW_SOURCE_LABEL;
 

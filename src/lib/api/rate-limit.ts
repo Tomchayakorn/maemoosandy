@@ -12,6 +12,7 @@ export const RATE_LIMITS = {
   wheelSpin: { limit: 20, windowMs: 60_000 },
   wheelCheckin: { limit: 10, windowMs: 60_000 },
   wheelUseCard: { limit: 10, windowMs: 60_000 },
+  wheelCashWithdraw: { limit: 5, windowMs: 60_000 },
   luckyCardPlay: { limit: 30, windowMs: 60_000 },
   luckyCardWithdraw: { limit: 5, windowMs: 60_000 },
   withdrawRequest: { limit: 5, windowMs: 60_000 },
