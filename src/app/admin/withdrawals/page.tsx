@@ -37,7 +37,10 @@ async function Data() {
     .order("created_at", { ascending: true })
     .limit(100);
   const local = await shouldUseLocalWithdrawals(admin);
-  const list = (local ? await listLocalRequests() : (rows ?? [])).map((r) => ({ ...r, source: ("source" in r && r.source) || ("jackpot" as "jackpot" | "lucky_card") }));
+  const list = (local ? await listLocalRequests() : (rows ?? [])).map((r) => ({
+    ...r,
+    source: ("source" in r && r.source) || ("jackpot" as "jackpot" | "lucky_card" | "lucky_card_bonus"),
+  }));
 
   // Evidence for the reviewer: the user's jackpot spin(s) and current wallet.
   const userIds = [...new Set(list.map((r) => r.user_id))];
@@ -49,10 +52,10 @@ async function Data() {
           .in("user_id", userIds)
           .eq("reward_key", "jackpot_5000")
           .order("created_at", { ascending: false }),
-        admin.from("wallets").select("user_id, balance, jackpot_withdrawals_available").in("user_id", userIds),
+        admin.from("wallets").select("user_id, balance, jackpot_withdrawals_available, lucky_card_bonus_total").in("user_id", userIds),
       ])
     : [{ data: [] }, { data: [] }];
-  const wData = (wallets.data ?? []) as { user_id: string; balance: number; jackpot_withdrawals_available?: number }[];
+  const wData = (wallets.data ?? []) as { user_id: string; balance: number; jackpot_withdrawals_available?: number; lucky_card_bonus_total?: number }[];
 
   if (list.length === 0) return <p className="text-cream-muted">ยังไม่มีคำขอถอน</p>;
 
@@ -66,7 +69,7 @@ async function Data() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <b className="text-lg text-gold-light">{r.amount_thb.toLocaleString("th-TH")} บาท</b>
               <span className="text-cream">
-                {r.source === "lucky_card" ? "ดวงดี มีเฮ · " : "แจ็กพอตกงล้อ · "}
+                {r.source === "lucky_card_bonus" ? "โบนัสสะสมดวงดี มีเฮ · " : r.source === "lucky_card" ? "ดวงดี มีเฮ (รางวัลลับ) · " : "แจ็กพอตกงล้อ · "}
                 {WITHDRAW_STATUS_LABEL[r.status]}
               </span>
             </div>
@@ -84,6 +87,12 @@ async function Data() {
                       ? <span className="text-rose-300">ไม่พบบันทึกถูกแจ็กพอตของผู้ใช้นี้!</span>
                       : jackpots.map((s) => `สปินที่ ${s.paid_spin_number ?? "-"} (${formatThaiDateTime(s.created_at)})`).join(" · ")}
                   </dd>
+                </>
+              )}
+              {r.source === "lucky_card_bonus" && (
+                <>
+                  <dt>ยอดโบนัสสะสมเกม</dt>
+                  <dd>{w?.lucky_card_bonus_total !== undefined ? `${w.lucky_card_bonus_total.toLocaleString("th-TH")} เหรียญ (อนุมัติแล้วจะหักออก 1,000)` : "-"}</dd>
                 </>
               )}
               <dt>กระเป๋าตอนนี้</dt>

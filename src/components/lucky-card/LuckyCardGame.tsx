@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { getLuckyCardMessage, LUCKY_CARD_CATEGORY_LABEL } from "@/data/lucky-card-messages";
+import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress, bonusWithdrawState } from "@/lib/lucky-card/bonus";
 import type { LuckyCardOutcome, LuckyCardPlayResponse } from "@/lib/lucky-card/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
@@ -27,12 +28,24 @@ type Phase =
   | { name: "loading"; index: number }
   | { name: "result"; index: number; outcome: LuckyCardOutcome };
 
-export function LuckyCardGame({ initialBalance }: { initialBalance: number }) {
+export function LuckyCardGame({
+  initialBalance,
+  initialBonusTotal = 0,
+  initialBonusPending = false,
+}: {
+  initialBalance: number;
+  /** Accumulated bonus coins from this game (separate from the main wallet). */
+  initialBonusTotal?: number;
+  /** A bonus cash-out request is already waiting for the admin. */
+  initialBonusPending?: boolean;
+}) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<Phase>({ name: "pick" });
   const [balance, setBalance] = useState(initialBalance);
   const [error, setError] = useState<string | null>(null);
+  const [bonusTotal, setBonusTotal] = useState(initialBonusTotal);
+  const [bonusPending, setBonusPending] = useState(initialBonusPending);
   const balanceRef = useRef(balance);
   const busy = useRef(false);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -41,6 +54,12 @@ export function LuckyCardGame({ initialBalance }: { initialBalance: number }) {
   useEffect(() => {
     if (!busy.current) setBalance(initialBalance);
   }, [initialBalance]);
+  useEffect(() => {
+    if (!busy.current) {
+      setBonusTotal(initialBonusTotal);
+      setBonusPending(initialBonusPending);
+    }
+  }, [initialBonusTotal, initialBonusPending]);
   useEffect(() => {
     balanceRef.current = balance;
   }, [balance]);
@@ -75,6 +94,11 @@ export function LuckyCardGame({ initialBalance }: { initialBalance: number }) {
         return rollback((json && "error" in json && json.error?.message) || "เปิดไพ่ไม่สำเร็จ ลองใหม่อีกครั้งนะคะ (ยังไม่มีการหักเหรียญซ้ำ)");
       }
       setBalance(json.balance);
+      if (json.bonusTotal !== null) setBonusTotal(json.bonusTotal);
+      else {
+        const won = json.outcome.kind === "bonus" ? json.outcome.coins : 0;
+        if (won) setBonusTotal((t) => t + won);
+      }
       walletBus.release(json.balance);
       setPhase({ name: "result", index, outcome: json.outcome });
       busy.current = false;
@@ -140,6 +164,8 @@ export function LuckyCardGame({ initialBalance }: { initialBalance: number }) {
           })}
         </div>
       )}
+
+      <BonusMeter total={bonusTotal} pending={bonusPending} onRequested={() => setBonusPending(true)} />
 
       {error && <p className="text-sm text-rose-300">{error}</p>}
       {notEnough && phase.name === "pick" && (
@@ -305,5 +331,68 @@ function ResultView({
         </Link>
       )}
     </motion.div>
+  );
+}
+
+/** Progress towards the 1,000-coin cash-out + the withdraw button. The server re-checks everything. */
+function BonusMeter({ total, pending, onRequested }: { total: number; pending: boolean; onRequested: () => void }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const state = bonusWithdrawState(total, pending);
+  const pct = Math.round(bonusProgress(total) * 100);
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-gold/30 bg-velvet/70 p-4 text-left">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="text-cream">โบนัสสะสมจากเกมนี้</span>
+        <b className="font-tarot text-gold-light">
+          {formatCoins(total)} / {formatCoins(BONUS_TARGET)} เหรียญ
+        </b>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={BONUS_TARGET}
+        aria-valuenow={Math.min(total, BONUS_TARGET)}
+        aria-label="โบนัสสะสมเทียบเป้า 1,000 เหรียญ"
+        className="h-3 overflow-hidden rounded-full border border-gold/30 bg-midnight"
+      >
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-gold to-gold-light transition-[width] duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-cream-muted">
+        ครบ {formatCoins(BONUS_TARGET)} เหรียญ ถอนเป็นเงิน {formatCoins(BONUS_WITHDRAW_THB)} บาท · เหรียญโบนัสยังเข้ากระเป๋าหลักตามปกติ
+        การถอนจะหักเฉพาะยอดสะสมนี้ ไม่กระทบเหรียญในกระเป๋า
+      </p>
+
+      {state.kind === "pending" && (
+        <div className="rounded-xl border border-gold/30 bg-gold/5 px-3 py-2.5 text-center text-sm text-gold-light">
+          ส่งคำขอถอนแล้ว รอแอดมินตรวจสอบและโอนเงินค่ะ ✨
+        </div>
+      )}
+      {state.kind === "locked" && (
+        <GoldButton variant="outline" disabled className="w-full">
+          สะสมอีก {formatCoins(state.remaining)} เหรียญ จึงถอนได้
+        </GoldButton>
+      )}
+      {state.kind === "ready" &&
+        (open ? (
+          <PrizeWithdrawForm
+            amountThb={BONUS_WITHDRAW_THB}
+            onCancel={() => setOpen(false)}
+            onDone={() => {
+              setOpen(false);
+              onRequested();
+              router.refresh();
+            }}
+          />
+        ) : (
+          <GoldButton onClick={() => setOpen(true)} className="w-full">
+            ถอน {formatCoins(BONUS_WITHDRAW_THB)} บาท
+          </GoldButton>
+        ))}
+    </div>
   );
 }

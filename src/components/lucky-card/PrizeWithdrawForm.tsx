@@ -19,7 +19,8 @@ export function PrizeWithdrawForm({
   onDone,
   onCancel,
 }: {
-  prizeId: string;
+  /** A "เทพประทานทรัพย์" prize id; omit it to withdraw the accumulated bonus (1,000 coins = 1,000 THB). */
+  prizeId?: string;
   amountThb: number;
   onDone: (r: LuckyCardWithdrawResponse) => void;
   onCancel?: () => void;
@@ -36,10 +37,10 @@ export function PrizeWithdrawForm({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/lucky-card/withdraw", {
+      const res = await fetch(prizeId ? "/api/lucky-card/withdraw" : "/api/lucky-card/bonus-withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prizeId, bankName, accountNumber, accountName }),
+        body: JSON.stringify(prizeId ? { prizeId, bankName, accountNumber, accountName } : { bankName, accountNumber, accountName }),
       });
       const json = (await res.json().catch(() => null)) as LuckyCardWithdrawResponse | { error?: { message?: string } } | null;
       if (!res.ok || !json || !("requestId" in json)) {

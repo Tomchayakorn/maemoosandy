@@ -22,15 +22,21 @@ export type LuckyCardOutcomeKind = "bonus100" | "bonus300" | "bonus500" | "secre
 /**
  * Chance per round as weights out of ODDS_TOTAL (10,000 = 100%).
  * `message` is whatever is left over, so it is computed — never edit it by hand.
- * Defaults (target house profit 70%): 100-coin 1.50% · 300-coin 0.40% · 500-coin 0.16% · secret prize 0.25% · message 97.69%.
- * Average payout = 1.5 + 1.2 + 0.8 coins + 2.5 THB (1,000 × 0.25%) = 6 per 20 coins played → 30% returned, 70% kept.
+ * Defaults (target: players get back ~30% on average, owner keeps ~70%):
+ *   100-coin 2.00% (1 in 50, the frequent one so the progress bar keeps moving) · 300-coin 0.10% · 500-coin 0.04%
+ *   · secret prize 0.10% (1 in 1,000) · message 97.76%.
+ * Bonus coins pay out TWICE (coins into the wallet AND towards the 1,000-coin cash-out), so:
+ *   bonus EV = 2.0 + 0.3 + 0.2 = 2.5 coins/round  →  counted twice = 5.0
+ *   secret EV = 1,000 THB × 0.10% = 1.0
+ *   total ≈ 6.0 per 20 coins played = 30% returned (assumes every accumulated 1,000 is eventually cashed out; the real
+ *   figure is a bit lower because partial progress is never withdrawn). Use expectedReturnPer20() to check any edit.
  */
 export const ODDS_TOTAL = 10_000;
 export const ODDS = {
-  bonus100: 150,
-  bonus300: 40,
-  bonus500: 16,
-  secret: 25,
+  bonus100: 200,
+  bonus300: 10,
+  bonus500: 4,
+  secret: 10,
 } as const;
 
 export const ODDS_MESSAGE = ODDS_TOTAL - (ODDS.bonus100 + ODDS.bonus300 + ODDS.bonus500 + ODDS.secret);
@@ -46,6 +52,16 @@ export const ODDS_TABLE: readonly (readonly [LuckyCardOutcomeKind, number])[] = 
 
 /** Coins credited for each bonus tier (must stay within the SQL whitelist 100/300/500). */
 export const BONUS_COINS = { bonus100: 100, bonus300: 300, bonus500: 500 } as const;
+
+/**
+ * Expected payout per round, in coin/THB units (1 coin = 1 THB). Bonus coins are counted twice: once as coins credited
+ * to the wallet and once as progress towards the 1,000-THB cash-out. Defaults → 6.0 (30% of 20).
+ */
+export function expectedReturnPer20(): number {
+  const bonusEv = (ODDS.bonus100 * BONUS_COINS.bonus100 + ODDS.bonus300 * BONUS_COINS.bonus300 + ODDS.bonus500 * BONUS_COINS.bonus500) / ODDS_TOTAL;
+  const secretEv = (ODDS.secret * SECRET_PRIZE_THB) / ODDS_TOTAL;
+  return 2 * bonusEv + secretEv;
+}
 
 /** Throws if the numbers above are inconsistent (used by tests). */
 export function validateLuckyCardConfig(): void {

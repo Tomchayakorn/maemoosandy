@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { LuckyCardGame } from "@/components/lucky-card/LuckyCardGame";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getMyWallet } from "@/lib/wallet";
 
 export const metadata: Metadata = {
@@ -32,6 +32,18 @@ async function Gate() {
   await connection();
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/lucky-card");
-  const wallet = await getMyWallet();
-  return <LuckyCardGame initialBalance={wallet?.balance ?? 0} />;
+  const [wallet, pending] = await Promise.all([
+    getMyWallet(),
+    // own pending bonus cash-out request (RLS: own rows only)
+    createClient().then((sb) =>
+      sb.from("withdrawal_requests").select("id").eq("source", "lucky_card_bonus").eq("status", "pending").maybeSingle(),
+    ),
+  ]);
+  return (
+    <LuckyCardGame
+      initialBalance={wallet?.balance ?? 0}
+      initialBonusTotal={wallet?.lucky_card_bonus_total ?? 0}
+      initialBonusPending={!!pending.data}
+    />
+  );
 }

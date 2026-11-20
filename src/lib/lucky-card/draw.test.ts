@@ -3,13 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { LUCKY_CARD_MESSAGES } from "../../data/lucky-card-messages";
-import { ODDS, ODDS_MESSAGE, ODDS_TOTAL, validateLuckyCardConfig } from "../lucky-card-config";
+import { expectedReturnPer20, ODDS, ODDS_MESSAGE, ODDS_TOTAL, validateLuckyCardConfig } from "../lucky-card-config";
 import { drawOutcome, kindForRoll } from "./draw";
 
 describe("lucky card config", () => {
   it("is consistent", () => {
     expect(() => validateLuckyCardConfig()).not.toThrow();
     expect(ODDS.bonus100 + ODDS.bonus300 + ODDS.bonus500 + ODDS.secret + ODDS_MESSAGE).toBe(ODDS_TOTAL);
+  });
+});
+
+describe("expected return", () => {
+  it("default odds return ~30% (6 of 20) with bonus counted twice", () => {
+    // If you change the odds on purpose, update this expectation together with the doc comment in lucky-card-config.ts.
+    expect(expectedReturnPer20()).toBeCloseTo(6, 5);
   });
 });
 

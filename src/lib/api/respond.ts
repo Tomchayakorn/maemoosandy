@@ -31,6 +31,7 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   PRIZE_ALREADY_WITHDRAWN: { status: 409, message: "สิทธิ์รางวัลนี้ถูกถอนไปแล้ว" },
   INVALID_OUTCOME: { status: 400, message: "ผลรางวัลไม่ถูกต้อง" },
   INVALID_CARD: { status: 400, message: "เลือกไพ่ไม่ถูกต้อง" },
+  BONUS_NOT_ENOUGH: { status: 400, message: "ยอดโบนัสสะสมยังไม่ถึง 1,000 เหรียญ ยังถอนไม่ได้ค่ะ" },
   INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
 };
 

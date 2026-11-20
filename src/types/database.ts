@@ -61,6 +61,8 @@ export type Database = {
           spin_tickets: number;
           free_reading_tickets: number;
           jackpot_withdrawals_available: number;
+          /** Accumulated bonus coins won in "ดวงดี มีเฮ" (migration 0007); only an approved bonus withdrawal subtracts 1,000. */
+          lucky_card_bonus_total: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -70,12 +72,14 @@ export type Database = {
           spin_tickets?: number;
           free_reading_tickets?: number;
           jackpot_withdrawals_available?: number;
+          lucky_card_bonus_total?: number;
         };
         Update: {
           balance?: number;
           spin_tickets?: number;
           free_reading_tickets?: number;
           jackpot_withdrawals_available?: number;
+          lucky_card_bonus_total?: number;
         };
         Relationships: [];
       };
@@ -196,7 +200,7 @@ export type Database = {
           account_name: string;
           status: WithdrawalStatus;
           ledger_id: string | null;
-          source: "jackpot" | "lucky_card";
+          source: "jackpot" | "lucky_card" | "lucky_card_bonus";
           prize_id: string | null;
           reviewed_by: string | null;
           reviewed_at: Timestamp | null;
@@ -314,7 +318,11 @@ export type Database = {
           p_bonus_coins: number;
           p_prize_thb: number;
         };
-        Returns: Json; // { play_id, balance, prize_id }
+        Returns: Json; // { play_id, balance, prize_id, bonus_total }
+      };
+      request_lucky_card_bonus_withdrawal: {
+        Args: { p_user_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
+        Returns: Json; // { request_id, amount_thb, bonus_total, already_pending }
       };
       request_lucky_card_withdrawal: {
         Args: { p_user_id: string; p_prize_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
@@ -360,6 +368,7 @@ export const RPC_ERRORS = [
   "INVALID_OUTCOME",
   "INVALID_CARD",
   "INVALID_COST",
+  "BONUS_NOT_ENOUGH",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

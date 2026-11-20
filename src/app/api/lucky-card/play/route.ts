@@ -46,7 +46,7 @@ async function play(request: Request) {
   });
   if (error) return rpcErrorResponse(error);
 
-  const r = data as { play_id: string; balance: number; prize_id: string | null };
+  const r = data as { play_id: string; balance: number; prize_id: string | null; bonus_total?: number };
   if (outcome.kind === "secret") {
     await notifyAdminLine(`🎴 ดวงดี มีเฮ: ผู้ใช้ ${user.email ?? user.id} ได้รางวัลลับ "เทพประทานทรัพย์" ${SECRET_PRIZE_THB.toLocaleString("th-TH")} บาท`);
   }
@@ -58,5 +58,5 @@ async function play(request: Request) {
         ? { kind: "bonus", coins: outcome.coins }
         : { kind: "secret", prizeId: r.prize_id ?? "", amountThb: SECRET_PRIZE_THB };
 
-  return NextResponse.json<LuckyCardPlayResponse>({ outcome: result, balance: r.balance, cost: LUCKY_CARD_COST });
+  return NextResponse.json<LuckyCardPlayResponse>({ outcome: result, balance: r.balance, bonusTotal: r.bonus_total ?? null, cost: LUCKY_CARD_COST });
 }
