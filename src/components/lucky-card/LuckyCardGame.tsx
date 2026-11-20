@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
  */
 export const LUCKY_CARD_COST = 20; // display + optimistic hold only; the server charges from its own constant
 export const LUCKY_CARD_COUNT = 8;
+const CARD_BACK_SRC = "/images/card-back-mandala.jpg";
 
 type Phase =
   | { name: "pick" }
@@ -111,9 +113,28 @@ export function LuckyCardGame({ initialBalance }: { initialBalance: number }) {
                 animate={reduce ? undefined : { rotateY: flipped ? 180 : 0 }}
                 whileTap={reduce ? undefined : { scale: 0.93 }}
                 transition={{ duration: 0.25 }}
-                className="aspect-[5/8] rounded-xl border border-gold/50 bg-gradient-to-b from-midnight to-velvet font-tarot text-2xl text-gold shadow-[0_0_14px_-6px_rgb(212_175_55/0.7)] disabled:opacity-50"
+                // card follows the artwork's own ratio (1536×2752) so `cover` shows the whole frame, uncropped
+                className="preserve-3d relative aspect-[1536/2752] rounded-xl shadow-[0_0_14px_-6px_rgb(212_175_55/0.7)] disabled:opacity-50"
               >
-                {flipped ? <span className="inline-block animate-pulse [transform:rotateY(180deg)]">✦</span> : "✦"}
+                {/* back (mandala artwork) */}
+                <span className="backface-hidden absolute inset-0 overflow-hidden rounded-xl border border-gold/50 bg-velvet">
+                  <Image
+                    src={CARD_BACK_SRC}
+                    alt=""
+                    fill
+                    sizes="(max-width: 448px) 22vw, 100px"
+                    quality={75}
+                    draggable={false}
+                    className="object-cover object-center"
+                  />
+                  {flipped && reduce && (
+                    <span className="absolute inset-0 flex animate-pulse items-center justify-center bg-velvet/50 font-tarot text-2xl text-gold">✦</span>
+                  )}
+                </span>
+                {/* face shown while the server draws (revealed by the flip) */}
+                <span className="backface-hidden absolute inset-0 flex items-center justify-center rounded-xl border border-gold bg-gradient-to-b from-midnight to-velvet font-tarot text-2xl text-gold [transform:rotateY(180deg)]">
+                  <span className="animate-pulse">✦</span>
+                </span>
               </motion.button>
             );
           })}
