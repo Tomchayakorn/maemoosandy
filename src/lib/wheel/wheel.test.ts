@@ -4,6 +4,8 @@ vi.mock("server-only", () => ({}));
 import { WHEEL_SPIN_COST } from "../pricing";
 import {
   buffedWeights,
+  HOT_WEIGHTS,
+  hotSpinShare,
   expectedReturnPerPaidSpin,
   isJackpotPaidSpin,
   JACKPOT_EVERY_PAID_SPINS,
@@ -37,9 +39,9 @@ describe("wheel config", () => {
 
   it("matches the agreed ordinary odds, with the jackpot at weight 0", () => {
     expect(odds()).toEqual({
-      none: 7030,
-      "coins:20": 2000,
-      "coins:40": 550,
+      none: 7160,
+      "coins:20": 1900,
+      "coins:40": 520,
       "luck_card:1": 150,
       "coins:120": 100,
       "coins:400": 20,
@@ -172,7 +174,7 @@ describe("return to players (target ≈ 35%, owner keeps ≈ 65%)", () => {
   });
   it("small prizes hit often: about 3 in 10 normal spins win something", () => {
     const winWeight = WHEEL_SEGMENTS.reduce((sum, s, i) => sum + (s.type !== "none" ? SEGMENT_WEIGHTS[i] : 0), 0);
-    expect(winWeight / TOTAL_WEIGHT).toBeGreaterThan(0.29);
+    expect(winWeight / TOTAL_WEIGHT).toBeGreaterThan(0.28);
   });
   it("prize ladder after the cash tally: coin prizes are 20 / 40 / 120 / 400 (the tally adds 25% on top, so each costs the owner 1.25x)", () => {
     const v = (k: string) => WHEEL_SEGMENTS.find((x) => x.key === k)?.value;
@@ -254,5 +256,43 @@ describe("luck card (+ความเฮง) odds", () => {
     });
     expect(ev).toBeLessThan(WHEEL_SPIN_COST);
     expect(ev).toBeGreaterThan(WHEEL_SPIN_COST / 2); // but every buffed spin returns at least the 20-coin prize (+25% tally)
+  });
+});
+
+describe("hot streak (มือขึ้น 5 ตาติด) odds", () => {
+  const typeAt = (i: number) => WHEEL_SEGMENTS[i].type;
+
+  it("hot weights total 10,000, have no jackpot and no luck card, and ~80% of spins win coins", () => {
+    expect(HOT_WEIGHTS).toHaveLength(WHEEL_SEGMENTS.length);
+    expect(HOT_WEIGHTS.reduce((a, b) => a + b, 0)).toBe(TOTAL_WEIGHT);
+    expect(HOT_WEIGHTS[JACKPOT_SEGMENT_INDEX]).toBe(0);
+    WHEEL_SEGMENTS.forEach((s, i) => {
+      if (s.type === "luck_card") expect(HOT_WEIGHTS[i]).toBe(0);
+    });
+    const coinWin = HOT_WEIGHTS.reduce((sum, w, i) => sum + (typeAt(i) === "coins" ? w : 0), 0) / TOTAL_WEIGHT;
+    expect(coinWin).toBeCloseTo(0.8, 5);
+  });
+
+  it("is weighted to the small prizes (20 / 40 make most of the wins)", () => {
+    const w = (key: string) => HOT_WEIGHTS[WHEEL_SEGMENTS.findIndex((s) => s.key === key)];
+    const coinTotal = w("coins_20") + w("coins_40") + w("coins_120") + w("coins_400");
+    expect((w("coins_20") + w("coins_40")) / coinTotal).toBeGreaterThan(0.95);
+  });
+
+  it("pickStandardReward({ hot: true }) never returns the jackpot or a luck card", () => {
+    for (let i = 0; i < 4000; i++) {
+      const { segment, segmentIndex } = pickStandardReward({ hot: true });
+      expect(segmentIndex).not.toBe(JACKPOT_SEGMENT_INDEX);
+      expect(segment.type).not.toBe("luck_card");
+    }
+  });
+
+  it("long-run share of hot spins is ~2% (a 5-spin streak after ~1 in 250 paid spins)", () => {
+    expect(hotSpinShare()).toBeCloseTo(0.0196, 3);
+  });
+
+  it("the budget still holds with the streak on: ~35% back, owner keeps ~65%", () => {
+    expect(returnRatio()).toBeGreaterThan(0.34);
+    expect(returnRatio()).toBeLessThan(0.36);
   });
 });

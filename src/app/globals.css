@@ -433,3 +433,23 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
   .buff-aura { animation: none; opacity: 0.7; }
   .buff-panel { animation: none; }
 }
+
+/* ── hot streak (มือขึ้น 5 ตาติด): warm orange glow, distinct from the gold luck-card buff ───────── */
+@keyframes hs-aura {
+  0%, 100% { opacity: 0.45; transform: scale(0.98); }
+  50% { opacity: 0.9; transform: scale(1.04); }
+}
+.hot-aura {
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(255 140 40 / 0.3) 0%, rgb(255 90 30 / 0.14) 48%, transparent 70%);
+  animation: hs-aura 1.8s ease-in-out infinite;
+}
+@keyframes hs-banner {
+  0%, 100% { box-shadow: 0 0 10px -2px rgb(255 150 50 / 0.5); }
+  50% { box-shadow: 0 0 24px 0 rgb(255 170 60 / 0.85); }
+}
+.hot-banner { animation: hs-banner 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .hot-aura { animation: none; opacity: 0.7; }
+  .hot-banner { animation: none; }
+}

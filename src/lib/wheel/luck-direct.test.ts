@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-import { addWheelCash, applyLuckAfterSpin, readLuck } from "./luck-direct";
+import { addWheelCash, applyHotAfterSpin, applyLuckAfterSpin, readHot, readLuck } from "./luck-direct";
 
 type Row = Record<string, unknown>;
 
@@ -21,7 +21,7 @@ function fakeAdmin(wallet: Row, opts: { onRead?: (w: Row, n: number) => void } =
         reads++;
         const snapshot = { ...w };
         opts.onRead?.(w, reads); // a concurrent writer may change the row right after we read it
-        return { data: Object.keys(snapshot).includes("luck_cards") || Object.keys(snapshot).includes("wheel_cash_total") ? snapshot : { user_id: "u1", balance: 1 }, error: null };
+        return { data: Object.keys(snapshot).some((k) => ["luck_cards", "wheel_cash_total", "hot_streak_rounds"].includes(k)) ? snapshot : { user_id: "u1", balance: 1 }, error: null };
       },
       then(resolve: (v: unknown) => void) {
         const hit = filters.every((f) => f(w));
@@ -89,5 +89,25 @@ describe("cash tally in the no-RPC fallback", () => {
   });
   it("returns null when the column doesn't exist (migration 0013 missing)", async () => {
     expect(await addWheelCash(fakeAdmin({ balance: 5 }).admin, "u1", 10)).toBeNull();
+  });
+});
+
+describe("hot streak in the no-RPC fallback", () => {
+  it("reads the streak, or null when the column doesn't exist (migration 0014 missing)", async () => {
+    expect(await readHot(fakeAdmin({ hot_streak_rounds: 3 }).admin, "u1")).toBe(3);
+    expect(await readHot(fakeAdmin({ balance: 5 }).admin, "u1")).toBeNull();
+  });
+  it("counts a running streak down 5 -> 0 and ignores the roll while it runs", async () => {
+    const { admin, wallet } = fakeAdmin({ hot_streak_rounds: 5 });
+    const seen: number[] = [];
+    for (let i = 0; i < 6; i++) seen.push((await applyHotAfterSpin(admin, "u1", { paid: true, trigger: i === 2 }))!.rounds);
+    expect(seen).toEqual([4, 3, 2, 1, 0, 0]); // the roll on the 3rd spin is ignored (a streak is running); after it ends nothing restarts without a roll
+    expect(wallet.hot_streak_rounds).toBe(0);
+  });
+  it("starts a streak only on a PAID spin with the roll, never on a free spin", async () => {
+    const a = fakeAdmin({ hot_streak_rounds: 0 });
+    expect(await applyHotAfterSpin(a.admin, "u1", { paid: false, trigger: true })).toEqual({ rounds: 0, applied: false, started: false });
+    expect(await applyHotAfterSpin(a.admin, "u1", { paid: true, trigger: false })).toEqual({ rounds: 0, applied: false, started: false });
+    expect(await applyHotAfterSpin(a.admin, "u1", { paid: true, trigger: true })).toEqual({ rounds: 5, applied: false, started: true });
   });
 });

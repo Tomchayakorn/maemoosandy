@@ -14,6 +14,7 @@ import { walletBus } from "@/lib/wallet-bus";
 import { wheelSfx, type SweepDir, type WheelFx } from "@/lib/audio/wheelSfx";
 import { WheelCashPanel } from "@/components/wheel/WheelCashPanel";
 import { cashCredit, WHEEL_CASH_PCT } from "@/lib/wheel/cash";
+import { HOT_STREAK_ROUNDS } from "@/lib/wheel/hot-streak";
 import { BUFF_MULTIPLIER, BUFF_ROUNDS } from "@/lib/wheel/luck-card";
 import { WHEEL_SEGMENTS, type CheckinResponse, type SpinResponse } from "@/lib/wheel/segments";
 
@@ -35,6 +36,7 @@ export function WheelExperience({
   initialWheelCash = null,
   initialCashPending = false,
   initialCashUsage = { day: 0, week: 0 },
+  initialHotStreak = 0,
 }: {
   initialTickets: number;
   initialBalance: number;
@@ -47,6 +49,8 @@ export function WheelExperience({
   initialWheelCash?: number | null;
   initialCashPending?: boolean;
   initialCashUsage?: { day: number; week: number };
+  /** spins left in the "มือขึ้น 5 ตาติด" hot streak (0 = none) */
+  initialHotStreak?: number;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -57,6 +61,7 @@ export function WheelExperience({
   const [buffRounds, setBuffRounds] = useState(initialLuckBuffRounds);
   const [usingCard, setUsingCard] = useState(false);
   const [wheelCash, setWheelCash] = useState<number | null>(initialWheelCash);
+  const [hotRounds, setHotRounds] = useState(initialHotStreak);
   const [checkedIn, setCheckedIn] = useState(initialCheckedIn);
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -85,7 +90,7 @@ export function WheelExperience({
   // snapshot that DIFFERS from the last one applied: when a spin ends the props are still the pre-spin snapshot, and re-applying
   // them would overwrite the balance/cards/buff taken from the spin response until the refresh arrives (and briefly re-enable
   // buttons that should be locked, e.g. "ใช้การ์ด" right after the last coins were spent).
-  const synced = useRef({ t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash });
+  const synced = useRef({ t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash, h: initialHotStreak });
   useEffect(() => {
     if (spinning || pending.current) return;
     const s = synced.current;
@@ -95,18 +100,20 @@ export function WheelExperience({
       s.f === initialFreeReadings &&
       s.c === initialLuckCards &&
       s.r === initialLuckBuffRounds &&
-      s.w === initialWheelCash
+      s.w === initialWheelCash &&
+      s.h === initialHotStreak
     ) {
       return;
     }
-    synced.current = { t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash };
+    synced.current = { t: initialTickets, b: initialBalance, f: initialFreeReadings, c: initialLuckCards, r: initialLuckBuffRounds, w: initialWheelCash, h: initialHotStreak };
     setTickets(initialTickets);
     setBalance(initialBalance);
     setFreeReadings(initialFreeReadings);
     setLuckCards(initialLuckCards);
     setBuffRounds(initialLuckBuffRounds);
     setWheelCash(initialWheelCash);
-  }, [initialTickets, initialBalance, initialFreeReadings, initialLuckCards, initialLuckBuffRounds, initialWheelCash, spinning]);
+    setHotRounds(initialHotStreak);
+  }, [initialTickets, initialBalance, initialFreeReadings, initialLuckCards, initialLuckBuffRounds, initialWheelCash, initialHotStreak, spinning]);
 
   // Never leave the header badge frozen if the page is left mid-spin.
   useEffect(() => {
@@ -128,6 +135,10 @@ export function WheelExperience({
     if (res.luckCards !== undefined) setLuckCards(res.luckCards);
     if (res.luckBuffRounds !== undefined) setBuffRounds(res.luckBuffRounds);
     if (res.wheelCashTotal !== undefined) setWheelCash(res.wheelCashTotal);
+    if (res.hotStreakRounds !== undefined) setHotRounds(res.hotStreakRounds);
+    // hot streak: it just started (affects the next spins) or its last spin was this one
+    if (res.hotStarted) setNotice(`🔥 มือขึ้น! ${HOT_STREAK_ROUNDS} รอบถัดไปโอกาสได้เหรียญสูงขึ้น (ประมาณ 80% ต่อรอบ)`);
+    else if (res.hotApplied && res.hotStreakRounds === 0) setNotice("มือขึ้นครบ 5 รอบแล้ว สิ้นสุดแล้ว ✨");
     // the buff ran its last round on this spin: effects switch off (they follow buffRounds) and say so
     if (res.buffApplied && res.luckBuffRounds === 0) setNotice("บัฟ +ความเฮง ครบ 3 รอบแล้ว สิ้นสุดแล้ว ✨");
     walletBus.release(res.balance); // header badge: reveal the final balance together with the prize modal
@@ -308,6 +319,17 @@ export function WheelExperience({
         ครั้ง
       </div>
 
+      {/* มือขึ้น 5 ตาติด: visible while the streak runs (the odds really are better, so it is shown, never hidden) */}
+      {hotRounds > 0 && (
+        <div
+          role="status"
+          data-testid="hot-banner"
+          className="hot-banner w-full rounded-2xl border border-amber-300/60 bg-velvet/80 px-4 py-2.5 text-center text-sm text-amber-200"
+        >
+          🔥 มือขึ้น! โอกาสได้เหรียญสูงขึ้น (ประมาณ 80% ต่อรอบ) · เหลือ {hotRounds}/{HOT_STREAK_ROUNDS} รอบ
+        </div>
+      )}
+
       {/* การ์ด +ความเฮง: held cards + buff status (shown only when relevant) */}
       {(luckCards > 0 || buffRounds > 0) && (
         <div
@@ -359,6 +381,7 @@ export function WheelExperience({
       {/* Wheel (extends to the screen edges so the flame ring has room on phones) */}
       <div ref={wheelBox} data-wheel-box className="relative -mx-4 w-[calc(100%+2rem)] max-w-[30rem] self-center">
         {/* luck-card buff: soft golden aura behind the wheel (inside the box, never wider than the screen) */}
+        {hotRounds > 0 && <div aria-hidden data-testid="hot-aura" className="hot-aura absolute inset-[3%] rounded-full" />}
         {buffRounds > 0 && <div aria-hidden data-testid="buff-aura" className="buff-aura absolute inset-[6%] rounded-full" />}
         <FantasyWheel
           rotation={rotation}
@@ -416,7 +439,7 @@ export function WheelExperience({
       <MysticCard className="w-full px-5 py-4 text-sm text-cream-muted">
         <p className="mb-1 font-serif text-gold-light">รางวัลบนกงล้อ</p>
         <p className="leading-relaxed">
-          โบนัสเหรียญ 20 · 40 · 120 · 400 เหรียญ สิทธิ์ดูดวงฟรี การ์ด +ความเฮง (กดใช้แล้วการันตีได้รางวัลทุกตาตลอด 3 รอบที่หมุนถัดไป + เพิ่มโอกาสได้ 400 เหรียญอีก 30% ใช้ได้เมื่อมีเหรียญพอหมุนหรือมีสิทธิ์หมุนฟรี) และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
+          โบนัสเหรียญ 20 · 40 · 120 · 400 เหรียญ สิทธิ์ดูดวงฟรี การ์ด +ความเฮง (กดใช้แล้วการันตีได้รางวัลทุกตาตลอด 3 รอบที่หมุนถัดไป + เพิ่มโอกาสได้ 400 เหรียญอีก 30% ใช้ได้เมื่อมีเหรียญพอหมุนหรือมีสิทธิ์หมุนฟรี) บางครั้งจะเข้าสู่ “มือขึ้น 5 ตาติด” (โอกาสได้เหรียญสูงขึ้นประมาณ 80% ต่อรอบ) และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)
           เช็กอินได้วันละ 1 ครั้ง (เวลาไทย) หมุนต่อได้ครั้งละ {WHEEL_SPIN_COST} เหรียญ
         </p>
       </MysticCard>
@@ -476,6 +499,11 @@ export function WheelExperience({
                 {result.paid && result.reward.type === "coins" && result.reward.value < 5000 && cashCredit(result.reward.value) > 0 && (
                   <p data-testid="cash-credit-note" className="text-xs text-gold-light">
                     + {cashCredit(result.reward.value)} เหรียญเข้ายอดสะสมถอนเงิน ({WHEEL_CASH_PCT}% ของรางวัล) · ไม่ใช่เหรียญในกระเป๋า
+                  </p>
+                )}
+                {result.hotStarted && (
+                  <p data-testid="hot-start-note" className="text-sm text-amber-200">
+                    🔥 มือขึ้น! {HOT_STREAK_ROUNDS} รอบถัดไปโอกาสได้เหรียญสูงขึ้น (ประมาณ 80% ต่อรอบ)
                   </p>
                 )}
                 {result.buffApplied && (

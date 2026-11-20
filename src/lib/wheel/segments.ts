@@ -38,6 +38,12 @@ export type SpinResponse = {
   luckBuffRounds?: number;
   /** True when the buff was active for THIS spin (the 500-coin chance was boosted). */
   buffApplied?: boolean;
+  /** Spins left in the "มือขึ้น 5 ตาติด" hot streak after this spin (0 = none; absent before migration 0014). */
+  hotStreakRounds?: number;
+  /** True when this spin used the hot odds. */
+  hotApplied?: boolean;
+  /** True when this PAID spin started a hot streak (it affects the next spins). */
+  hotStarted?: boolean;
   /** "ยอดสะสมจากการหมุนเกม" after this spin (25% of coin prizes won on PAID spins; separate from the wallet; absent before migration 0013). */
   wheelCashTotal?: number;
   /** True when this spin cost coins instead of a free ticket. */

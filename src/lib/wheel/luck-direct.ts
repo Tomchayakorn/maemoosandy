@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { HOT_STREAK_ROUNDS } from "./hot-streak";
 
 type Admin = ReturnType<typeof createAdminClient>;
 export type LuckSnapshot = { cards: number; buff: number };
@@ -59,5 +60,34 @@ export async function addWheelCash(admin: Admin, userId: string, credit: number)
     if (updated?.length === 1) return updated[0].wheel_cash_total;
   }
   console.error("lucky-wheel direct: could not add to the cash tally", { userId, credit });
+  return null;
+}
+
+/**
+ * Hot streak for the no-RPC fallback. Returns the spins left, or null when the column doesn't exist (migration 0014 not installed).
+ */
+export async function readHot(admin: Admin, userId: string): Promise<number | null> {
+  const { data, error } = await admin.from("wallets").select("hot_streak_rounds").eq("user_id", userId).maybeSingle();
+  if (error || !data || typeof data.hot_streak_rounds !== "number") return null;
+  return data.hot_streak_rounds;
+}
+
+/** After a fallback spin: count the streak down, or start one (paid spin + the route's crypto roll, none running). Compare-and-swap. */
+export async function applyHotAfterSpin(
+  admin: Admin,
+  userId: string,
+  o: { paid: boolean; trigger: boolean },
+): Promise<{ rounds: number; applied: boolean; started: boolean } | null> {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const cur = await readHot(admin, userId);
+    if (cur === null) return null;
+    const applied = cur > 0;
+    const started = cur === 0 && o.paid && o.trigger;
+    const next = applied ? cur - 1 : started ? HOT_STREAK_ROUNDS : 0;
+    if (next === cur) return { rounds: cur, applied, started };
+    const { data: updated } = await admin.from("wallets").update({ hot_streak_rounds: next }).eq("user_id", userId).eq("hot_streak_rounds", cur).select("hot_streak_rounds");
+    if (updated?.length === 1) return { rounds: updated[0].hot_streak_rounds, applied, started };
+  }
+  console.error("lucky-wheel direct: could not update the hot streak", { userId });
   return null;
 }

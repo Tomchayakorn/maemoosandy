@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError, requireUser, rpcErrorResponse } from "@/lib/api/respond";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
@@ -5,7 +6,8 @@ import { WHEEL_SPIN_COST } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { JACKPOT_EVERY_PAID_SPINS, JACKPOT_SEGMENT_INDEX, pickStandardReward } from "@/lib/wheel/rewards";
 import { WHEEL_CASH_PCT, cashCredit } from "@/lib/wheel/cash";
-import { addWheelCash, applyLuckAfterSpin, readLuck } from "@/lib/wheel/luck-direct";
+import { HOT_STREAK_ROUNDS, HOT_TRIGGER_ONE_IN } from "@/lib/wheel/hot-streak";
+import { addWheelCash, applyHotAfterSpin, applyLuckAfterSpin, readHot, readLuck } from "@/lib/wheel/luck-direct";
 import { spinDirect } from "@/lib/wheel/spin-direct";
 import { WHEEL_SEGMENTS, type SpinResponse, type WheelSegment } from "@/lib/wheel/segments";
 
@@ -34,8 +36,9 @@ const RETRY = WHEEL_SEGMENTS.find((s) => s.key === "retry_a")!;
 const isMissingFn = (e: { code?: string }) => e.code === "PGRST202" || e.code === "42883" || e.code === "42P01";
 /** Before migration 0010 the database does not know the 'luck_card' reward type: such a draw becomes "retry" instead of failing. */
 const legacySafe = (seg: WheelSegment): WheelSegment => (seg.type === "luck_card" ? RETRY : seg);
-/** Signatures tried in order: 13 args (0013: cash tally) → 12 args (0010/0012: luck cards) → 9 args (legacy). A missing one is skipped for a minute. */
-const sigMissingUntil = [0, 0];
+/** Signatures tried in order: 18 args (0014: hot streak) → 13 (0013: cash tally) → 12 (0010/0012: luck cards) → 9 (legacy). A missing one is skipped for a minute. */
+const SIGNATURES = [{ cash: true, hot: true }, { cash: true, hot: false }, { cash: false, hot: false }] as const;
+const sigMissingUntil = [0, 0, 0];
 
 type Row = {
   paid: boolean;
@@ -48,6 +51,9 @@ type Row = {
   luckBuffRounds?: number;
   buffApplied?: boolean;
   wheelCashTotal?: number;
+  hotStreakRounds?: number;
+  hotApplied?: boolean;
+  hotStarted?: boolean;
 };
 
 async function spin() {
@@ -63,13 +69,17 @@ async function spin() {
   // Buff rule: a buffed spin never ends as "retry" (buffedWeights has no retry; the database refuses one too). Belt and braces:
   const buffedSegment: WheelSegment =
     drawnBuffed.segment.type === "none" ? WHEEL_SEGMENTS.find((s) => s.key === "coins_20")! : drawnBuffed.segment;
+  // Hot streak ("มือขึ้น 5 ตาติด"): a third draw from the hot odds + the crypto roll that may START a streak after this paid spin.
+  // The database applies both under the wallet lock (a running streak uses the hot draw; a new one starts only on a paid spin outside a streak).
+  const hotSegment = pickStandardReward({ hot: true }).segment;
+  const hotTrigger = randomInt(HOT_TRIGGER_ONE_IN) === 0;
   const jackpot = WHEEL_SEGMENTS[JACKPOT_SEGMENT_INDEX];
 
   const admin = createAdminClient();
   let row: Row | null = null;
   let usedStandard: WheelSegment = standard.segment;
 
-  const call = (std: WheelSegment, buff?: WheelSegment, cash = false) =>
+  const call = (std: WheelSegment, buff?: WheelSegment, cash = false, hot = false) =>
     admin.rpc("spin_wheel_cycle", {
       p_user_id: user.id,
       p_cost: WHEEL_SPIN_COST,
@@ -82,16 +92,25 @@ async function spin() {
       p_jackpot_value: jackpot.value,
       ...(buff ? { p_buff_reward_key: buff.key, p_buff_reward_type: buff.type, p_buff_reward_value: buff.value } : {}),
       ...(cash ? { p_cash_pct: WHEEL_CASH_PCT } : {}),
+      ...(hot
+        ? {
+            p_hot_trigger: hotTrigger,
+            p_hot_reward_key: hotSegment.key,
+            p_hot_reward_type: hotSegment.type,
+            p_hot_reward_value: hotSegment.value,
+            p_hot_rounds: HOT_STREAK_ROUNDS,
+          }
+        : {}),
     });
 
   if (Date.now() >= rpcRetryAt) {
     let res: Awaited<ReturnType<typeof call>> | null = null;
-    for (const [i, withCash] of [[0, true], [1, false]] as const) {
+    for (const [i, sig] of SIGNATURES.entries()) {
       if (Date.now() < sigMissingUntil[i]) continue;
-      const attempt = await call(standard.segment, buffedSegment, withCash);
+      const attempt = await call(standard.segment, buffedSegment, sig.cash, sig.hot);
       if (attempt.error && isMissingFn(attempt.error)) {
         sigMissingUntil[i] = Date.now() + 60_000; // that migration isn't installed: try the next older signature
-        console.error("lucky-wheel: spin_wheel_cycle signature unavailable", { withCash, code: attempt.error.code, message: attempt.error.message });
+        console.error("lucky-wheel: spin_wheel_cycle signature unavailable", { ...sig, code: attempt.error.code, message: attempt.error.message });
         continue;
       }
       res = attempt;
@@ -114,6 +133,9 @@ async function spin() {
         luck_buff_rounds?: number;
         buff_applied?: boolean;
         wheel_cash_total?: number;
+        hot_streak_rounds?: number;
+        hot_applied?: boolean;
+        hot_started?: boolean;
       };
       if (r.jackpot && (data as { jackpot_withdrawals_available?: number }).jackpot_withdrawals_available === undefined) {
         // migration 0005 not installed: the jackpot was paid but no withdrawal quota was granted
@@ -130,6 +152,9 @@ async function spin() {
         luckBuffRounds: r.luck_buff_rounds,
         buffApplied: r.buff_applied,
         wheelCashTotal: r.wheel_cash_total,
+        hotStreakRounds: r.hot_streak_rounds,
+        hotApplied: r.hot_applied,
+        hotStarted: r.hot_started,
       };
     } else if (isMissingFn(error)) {
       // NOT silent: this path knows nothing about wheel_state/luck cards. 42P01 = a table the RPC needs is missing (run migration 0011).
@@ -144,7 +169,10 @@ async function spin() {
     // No-RPC fallback. It must still honour the luck-card buff, otherwise luck_buff_rounds never counts down.
     const luck = await readLuck(admin, user.id); // null = luck columns don't exist (migration 0010 missing)
     const buffActive = (luck?.buff ?? 0) > 0;
-    usedStandard = luck === null ? legacySafe(standard.segment) : buffActive ? buffedSegment : standard.segment;
+    const hot = await readHot(admin, user.id); // null = hot column doesn't exist (migration 0014 missing)
+    const hotActive = (hot ?? 0) > 0;
+    // reward precedence (as in SQL): luck-card buff > hot streak > ordinary (the jackpot is decided inside spinDirect)
+    usedStandard = luck === null ? legacySafe(standard.segment) : buffActive ? buffedSegment : hotActive ? hotSegment : standard.segment;
     const direct = await spinDirect(admin, user.id, usedStandard, jackpot, WHEEL_SPIN_COST, JACKPOT_EVERY_PAID_SPINS);
     if (direct.error) return rpcErrorResponse(direct.error);
     row = direct.data;
@@ -156,6 +184,10 @@ async function spin() {
       const credit = row.paid && !row.jackpot && usedStandard.type === "coins" ? cashCredit(usedStandard.value) : 0;
       const tally = await addWheelCash(admin, user.id, credit);
       if (tally !== null) row = { ...row, wheelCashTotal: tally };
+    }
+    if (hot !== null) {
+      const h = await applyHotAfterSpin(admin, user.id, { paid: row.paid, trigger: hotTrigger });
+      if (h) row = { ...row, hotStreakRounds: h.rounds, hotApplied: h.applied && !buffActive && !row.jackpot, hotStarted: h.started };
     }
   }
 
@@ -178,6 +210,9 @@ async function spin() {
     luckBuffRounds: row.luckBuffRounds,
     buffApplied: row.buffApplied,
     wheelCashTotal: row.wheelCashTotal,
+    hotStreakRounds: row.hotStreakRounds,
+    hotApplied: row.hotApplied,
+    hotStarted: row.hotStarted,
     paid: row.paid,
     cost: row.paid ? WHEEL_SPIN_COST : 0,
   });

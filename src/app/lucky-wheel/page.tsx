@@ -70,6 +70,7 @@ async function WheelGate() {
       initialWheelCash={typeof wallet?.wheel_cash_total === "number" ? wallet.wheel_cash_total : null}
       initialCashPending={cashPending}
       initialCashUsage={cashUsage}
+      initialHotStreak={typeof wallet?.hot_streak_rounds === "number" ? wallet.hot_streak_rounds : 0}
       />
       {quota > 0 && <JackpotBanner count={quota} />}
     </>

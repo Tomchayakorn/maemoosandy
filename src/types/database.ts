@@ -71,6 +71,8 @@ export type Database = {
           luck_buff_rounds: number;
           /** "ยอดสะสมจากการหมุนเกม" (migration 0013): tally of 25% of coin prizes won on paid spins; a withdrawal ticket, not wallet coins */
           wheel_cash_total: number;
+          /** spins left in the "มือขึ้น 5 ตาติด" hot streak (migration 0014) */
+          hot_streak_rounds: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -85,6 +87,7 @@ export type Database = {
           luck_cards?: number;
           luck_buff_rounds?: number;
           wheel_cash_total?: number;
+          hot_streak_rounds?: number;
         };
         Update: {
           balance?: number;
@@ -95,6 +98,7 @@ export type Database = {
           luck_cards?: number;
           luck_buff_rounds?: number;
           wheel_cash_total?: number;
+          hot_streak_rounds?: number;
         };
         Relationships: [];
       };
@@ -318,6 +322,11 @@ export type Database = {
           p_buff_reward_type?: RewardType;
           p_buff_reward_value?: number;
           p_cash_pct?: number;
+          p_hot_trigger?: boolean;
+          p_hot_reward_key?: string;
+          p_hot_reward_type?: RewardType;
+          p_hot_reward_value?: number;
+          p_hot_rounds?: number;
         };
         Returns: Json; // { spin_log_id, paid, jackpot, paid_spin_number, reward_key, balance, spin_tickets, free_reading_tickets }
       };

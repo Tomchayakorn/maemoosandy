@@ -2,6 +2,7 @@ import "server-only";
 import { randomInt } from "node:crypto";
 import { WHEEL_SPIN_COST } from "../pricing";
 import { WHEEL_CASH_PCT } from "./cash";
+import { HOT_STREAK_ROUNDS, HOT_TRIGGER_ONE_IN } from "./hot-streak";
 import { BUFF_MULTIPLIER, BUFF_ROUNDS } from "./luck-card";
 import { WHEEL_SEGMENTS } from "./segments";
 
@@ -11,8 +12,8 @@ import { WHEEL_SEGMENTS } from "./segments";
  * the database on every JACKPOT_EVERY_PAID_SPINS-th PAID spin (RPC `spin_wheel_cycle`),
  * and never for a free-ticket spin.
  *
- *  retry 70.3% · 20 coins 20% · 40 coins 5.5% · "การ์ด +ความเฮง" 1.5% · 120 coins 1% · 400 coins 0.2% · free reading 1.5%
- *  (29.7% of normal spins win something, the card included)
+ *  retry 71.6% · 20 coins 19% · 40 coins 5.2% · "การ์ด +ความเฮง" 1.5% · 120 coins 1% · 400 coins 0.2% · free reading 1.5%
+ *  (28.4% of normal spins win something, the card included). Lowered from 20% / 5.5% to pay for the hot streak below.
  *
  * While the luck-card buff is active the draw changes (see buffedWeights): "retry" is REMOVED (every spin of the buff wins something),
  * the 400-coin weight is multiplied by BUFF_MULTIPLIER, and all the weight "retry" used to have goes to the cheapest prize (20 coins).
@@ -25,7 +26,7 @@ import { WHEEL_SEGMENTS } from "./segments";
  *
  * NEVER import this from client code — the client only gets segments.ts.
  */
-export const SEGMENT_WEIGHTS: readonly number[] = [7030, 2000, 550, 150, 100, 20, 150, 0];
+export const SEGMENT_WEIGHTS: readonly number[] = [7160, 1900, 520, 150, 100, 20, 150, 0];
 
 export const TOTAL_WEIGHT = SEGMENT_WEIGHTS.reduce((a, b) => a + b, 0);
 
@@ -46,6 +47,20 @@ export function buffedWeights(): readonly number[] {
   w[i500] += extra;
   w[iRetry] = 0;
   return w;
+}
+
+/**
+ * Odds of a spin INSIDE a "มือขึ้น 5 ตาติด" hot streak (total 10,000, same slice order): 80% coin prize (20: 60% · 40: 17% · 120: 2.5% · 400: 0.5%),
+ * 2% free reading, 18% retry; no luck card (cards cannot chain) and no jackpot. Weighted to the small prizes on purpose: the streak keeps the rhythm
+ * and feeds the 25% cash tally without a big payout spike. A streak starts after a paid spin with probability 1 / HOT_TRIGGER_ONE_IN and lasts
+ * HOT_STREAK_ROUNDS spins; while the luck-card buff runs, the buff's own draw (always a prize) is used instead.
+ */
+export const HOT_WEIGHTS: readonly number[] = [1800, 6000, 1700, 0, 250, 50, 200, 0];
+
+/** Share of all spins that are hot spins in the long run: a streak of N spins starts with probability e on each non-hot PAID spin. */
+export function hotSpinShare(): number {
+  const e = 1 / HOT_TRIGGER_ONE_IN;
+  return (HOT_STREAK_ROUNDS * e) / (1 + HOT_STREAK_ROUNDS * e);
 }
 
 /**
@@ -90,9 +105,10 @@ export function segmentForRoll(roll: number, weights: readonly number[] = SEGMEN
   throw new RangeError(`roll ${roll} out of range`);
 }
 
-/** Cryptographically random weighted pick of an ORDINARY reward (never the jackpot). `buffed` = luck-card odds. */
-export function pickStandardReward(opts: { buffed?: boolean } = {}) {
-  const segmentIndex = segmentForRoll(randomInt(TOTAL_WEIGHT), opts.buffed ? buffedWeights() : SEGMENT_WEIGHTS);
+/** Cryptographically random weighted pick of an ORDINARY reward (never the jackpot). `buffed` = luck-card odds, `hot` = hot-streak odds. */
+export function pickStandardReward(opts: { buffed?: boolean; hot?: boolean } = {}) {
+  const weights = opts.buffed ? buffedWeights() : opts.hot ? HOT_WEIGHTS : SEGMENT_WEIGHTS;
+  const segmentIndex = segmentForRoll(randomInt(TOTAL_WEIGHT), weights);
   return { segmentIndex, segment: WHEEL_SEGMENTS[segmentIndex] };
 }
 
@@ -128,11 +144,14 @@ export function luckCardValueCoins(): number {
 
 /**
  * Long-run expected return per PAID spin, in coins. The jackpot replaces the ordinary result on every Nth paid spin, so
- * EV = (1 − 1/N) · ordinary + jackpot / N, with ordinary = normal-spin coins + P(card) · luckCardValueCoins().
+ * EV = (1 − 1/N) · ordinary + jackpot / N, with ordinary = (1 − f) · normal-spin coins + f · hot-spin coins + (1 − f) · P(card) · luckCardValueCoins(),
+ * where f = hotSpinShare(). (Overlap of a buff and a hot streak is ignored here — it is rare; the unit-test simulation includes it.)
  */
 export function expectedReturnPerPaidSpin(every = JACKPOT_EVERY_PAID_SPINS): { ordinary: number; jackpot: number; total: number } {
   const iCard = WHEEL_SEGMENTS.findIndex((s) => s.type === "luck_card");
-  const ordinary = coinsEv(SEGMENT_WEIGHTS) + (SEGMENT_WEIGHTS[iCard] / TOTAL_WEIGHT) * luckCardValueCoins();
+  // hot spins (share f of all spins) use HOT_WEIGHTS: no luck card there, so the card is won on (1 − f) of the spins
+  const f = hotSpinShare();
+  const ordinary = (1 - f) * coinsEv(SEGMENT_WEIGHTS) + f * coinsEv(HOT_WEIGHTS) + (1 - f) * (SEGMENT_WEIGHTS[iCard] / TOTAL_WEIGHT) * luckCardValueCoins();
   const jackpotValue = WHEEL_SEGMENTS[JACKPOT_SEGMENT_INDEX].value;
   const jackpot = jackpotValue / every;
   const ordinaryShare = (1 - 1 / every) * ordinary;
