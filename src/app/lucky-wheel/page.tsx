@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default function LuckyWheelPage() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-14 pt-8">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-28 pt-8">
       <header className="flex flex-col items-center gap-1.5 text-center">
         <p className="font-serif text-xs tracking-[0.25em] text-gold/90">✦ ลุ้นโชคเสริมดวง ✦</p>
         <h1 className="font-display text-4xl leading-snug">
