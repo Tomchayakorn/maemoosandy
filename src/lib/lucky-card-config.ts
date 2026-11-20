@@ -23,20 +23,21 @@ export type LuckyCardOutcomeKind = "bonus100" | "bonus300" | "bonus500" | "secre
  * Chance per round as weights out of ODDS_TOTAL (10,000 = 100%).
  * `message` is whatever is left over, so it is computed — never edit it by hand.
  * Defaults (target: players get back ~30% on average, owner keeps ~70%):
- *   100-coin 2.00% (1 in 50, the frequent one so the progress bar keeps moving) · 300-coin 0.10% · 500-coin 0.04%
- *   · secret prize 0.10% (1 in 1,000) · message 97.76%.
+ *   100-coin 2.22% (1 in ~45, frequent so the progress bar keeps moving) · 300-coin 0.16% (1 in 625, shows up now and then)
+ *   · 500-coin 0.01% (1 in 10,000) · secret prize 0.05% (1 in 2,000) · message 97.56%.
  * Bonus coins pay out TWICE (coins into the wallet AND towards the 1,000-coin cash-out), so:
- *   bonus EV = 2.0 + 0.3 + 0.2 = 2.5 coins/round  →  counted twice = 5.0
- *   secret EV = 1,000 THB × 0.10% = 1.0
- *   total ≈ 6.0 per 20 coins played = 30% returned (assumes every accumulated 1,000 is eventually cashed out; the real
- *   figure is a bit lower because partial progress is never withdrawn). Use expectedReturnPer20() to check any edit.
+ *   bonus EV = 2.22 + 0.48 + 0.05 = 2.75 coins/round  →  counted twice = 5.5
+ *   secret EV = 1,000 THB × 0.05% = 0.5
+ *   total = 6.0 per 20 coins played = 30% returned (assumes every accumulated 1,000 is eventually cashed out; the real
+ *   figure is a bit lower because partial progress is never withdrawn). Budget rule: a + 3b + 5c + 5s = 300 (weights of 100/300/500/secret)
+ *   keeps the total at exactly 6.0. Use expectedReturnPer20() to check any edit.
  */
 export const ODDS_TOTAL = 10_000;
 export const ODDS = {
-  bonus100: 200,
-  bonus300: 10,
-  bonus500: 4,
-  secret: 10,
+  bonus100: 222,
+  bonus300: 16,
+  bonus500: 1,
+  secret: 5,
 } as const;
 
 export const ODDS_MESSAGE = ODDS_TOTAL - (ODDS.bonus100 + ODDS.bonus300 + ODDS.bonus500 + ODDS.secret);

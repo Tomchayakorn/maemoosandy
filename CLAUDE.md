@@ -250,7 +250,7 @@ wait for the owner's confirmation before starting the next.
 - **Lucky card bonus cash-out (code done 2026-11-20, awaiting owner review):** bonus coins (100/300/500) still go to the main wallet AND add to `wallets.lucky_card_bonus_total` (same RPC statement, same wallet lock).
   Progress bar + "ถอน 1,000 บาท" button on /lucky-card; withdraw = `POST /api/lucky-card/bonus-withdraw` (bank details only) → RPC `request_lucky_card_bonus_withdrawal` (fixed 1,000, idempotent while one is pending;
   partial unique index = one pending per user) → `withdrawal_requests.source='lucky_card_bonus'` + LINE push to admin. Admin approve = counter −1,000 (main balance untouched); reject/cancel = status only.
-  Odds now (per 10,000): 100-coin 200 · 300-coin 10 · 500-coin 4 · secret 10 · message 9,776 → bonus counted twice + secret = 6.0 per 20 (30% back, 70% kept) — `expectedReturnPer20()` in `lucky-card-config.ts`.
+  Odds now (per 10,000): 100-coin 222 · 300-coin 16 · 500-coin 1 · secret 5 · message 9,756 → bonus counted twice + secret = 6.0 per 20 (30% back, 70% kept) — `expectedReturnPer20()` in `lucky-card-config.ts`.
   **MIGRATION `0007_lucky_card_bonus_withdrawal.sql` MUST BE RUN after 0006** (also backfills the counter from past plays once). Secret prize "เทพประทานทรัพย์" kept as is.
 
 ## Pre-launch checklist (before real customers pay)
