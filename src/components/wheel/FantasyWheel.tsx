@@ -68,9 +68,11 @@ type Props = {
   seconds: number;
   spinning: boolean;
   onComplete: () => void;
+  /** Segment key to light up (the luck-card buff highlights the 500-coin slice). Opacity/stroke only — no SVG filters on rotating content. */
+  highlightKey?: string;
 };
 
-export function FantasyWheel({ rotation, seconds, spinning, onComplete }: Props) {
+export function FantasyWheel({ rotation, seconds, spinning, onComplete, highlightKey }: Props) {
   const reduce = useReducedMotion();
   const disc = useMotionValue(0);
   const pointer = useMotionValue(0);
@@ -385,6 +387,13 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete }: Props)
                 <path d={slicePath(i)} fill="none" stroke="#000" strokeOpacity="0.55" strokeWidth={7} />
               </g>
               <path d={slicePath(i)} fill="none" stroke="#f3d98b" strokeOpacity="0.9" strokeWidth={1.4} />
+              {/* luck-card buff: pulsing bright rim + soft glow on the highlighted slice */}
+              {highlightKey === s.key && (
+                <>
+                  <path d={slicePath(i)} fill="#fff3b8" className="fw-buff-glow" />
+                  <path d={slicePath(i)} fill="none" stroke="#fff6c8" strokeWidth={4.5} className="fw-buff-rim" />
+                </>
+              )}
               <g transform={`rotate(${i * STEP} ${C} ${C})`}>
                 <text
                   x={C}

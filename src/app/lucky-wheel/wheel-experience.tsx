@@ -113,6 +113,8 @@ export function WheelExperience({
     setFreeReadings(res.freeReadingTickets);
     if (res.luckCards !== undefined) setLuckCards(res.luckCards);
     if (res.luckBuffRounds !== undefined) setBuffRounds(res.luckBuffRounds);
+    // the buff ran its last round on this spin: effects switch off (they follow buffRounds) and say so
+    if (res.buffApplied && res.luckBuffRounds === 0) setNotice("บัฟ +ความเฮง ครบ 3 รอบแล้ว สิ้นสุดแล้ว ✨");
     walletBus.release(res.balance); // header badge: reveal the final balance together with the prize modal
     setResult(res);
     setSpinning(false);
@@ -295,7 +297,7 @@ export function WheelExperience({
       {(luckCards > 0 || buffRounds > 0) && (
         <div
           data-testid="luck-panel"
-          className="flex w-full flex-col gap-2 rounded-2xl border border-gold/50 bg-velvet/80 px-4 py-3 shadow-[0_0_16px_-6px_rgb(212_175_55/0.5)]"
+          className={"flex w-full flex-col gap-2 rounded-2xl border border-gold/50 bg-velvet/80 px-4 py-3 shadow-[0_0_16px_-6px_rgb(212_175_55/0.5)]" + (buffRounds > 0 ? " buff-panel" : "")}
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-cream">
@@ -329,7 +331,7 @@ export function WheelExperience({
           )}
           {buffRounds > 0 ? (
             <p data-testid="buff-status" role="status" className="text-sm text-gold-light">
-              ✨ บัฟ +ความเฮง ทำงานอยู่ เหลือ {buffRounds}/{BUFF_ROUNDS} รอบ (โอกาสได้ 500 เหรียญเพิ่มขึ้น {Math.round((BUFF_MULTIPLIER - 1) * 100)}%)
+              ✨ กำลังใช้บัฟ +ความเฮง ลุ้น 500 เหรียญ · เหลือ {buffRounds}/{BUFF_ROUNDS} รอบ (โอกาสเพิ่มขึ้น {Math.round((BUFF_MULTIPLIER - 1) * 100)}%)
             </p>
           ) : (
             <p className="text-xs text-cream-muted">
@@ -341,7 +343,15 @@ export function WheelExperience({
 
       {/* Wheel (extends to the screen edges so the flame ring has room on phones) */}
       <div ref={wheelBox} data-wheel-box className="relative -mx-4 w-[calc(100%+2rem)] max-w-[30rem] self-center">
-        <FantasyWheel rotation={rotation} seconds={seconds} spinning={spinning} onComplete={finish} />
+        {/* luck-card buff: soft golden aura behind the wheel (inside the box, never wider than the screen) */}
+        {buffRounds > 0 && <div aria-hidden data-testid="buff-aura" className="buff-aura absolute inset-[6%] rounded-full" />}
+        <FantasyWheel
+          rotation={rotation}
+          seconds={seconds}
+          spinning={spinning}
+          onComplete={finish}
+          highlightKey={buffRounds > 0 ? "coins_500" : undefined}
+        />
       </div>
 
       {/* Actions */}

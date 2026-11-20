@@ -277,6 +277,12 @@ wait for the owner's confirmation before starting the next.
   **Coins rule:** a card won with < 50 coins is kept (`luck_cards` is credited with the prize, no balance condition). "ใช้การ์ด" needs a free ticket OR ≥ 50 coins: `use_luck_card(p_user_id, p_rounds, p_min_balance)` raises INSUFFICIENT_COINS otherwise (card not consumed),
   the UI disables the button and shows a "เติมเหรียญ" link; a running buff never expires by time and a spin that fails for lack of coins rolls back (no round used). 0010 is re-runnable (drops the old 2-arg `use_luck_card`). Verified in the browser pane at 375×812 with mocked APIs; the SQL is NOT tested against a real DB.
 
+- **Luck-card buff "stuck at 3/3" — root cause + fix (2026-11-21):** every one of the 475 spin_logs in the live DB has a NULL `paid_spin_number`, i.e. `spin_wheel_cycle` never completed for a paid spin; the route silently fell back to
+  `spin-direct.ts` (no luck cards / buff), so `luck_buff_rounds` never counted down and won cards were dropped. Most likely cause: `public.wheel_state` missing → 42P01 inside the RPC, which the route treated as "function missing".
+  Fixes: (1) migration **0011_wheel_state_ensure.sql** (create-if-missing + seed counter from paid-spin ledger rows; idempotent) — RUN IT; (2) the fallback is now luck-aware (`src/lib/wheel/luck-direct.ts`: reads the buff, uses the buffed draw, then
+  decrements the buff / adds a won card with a compare-and-swap); (3) the route now `console.error`s whenever it falls back (check Vercel logs). UI: while the buff runs the wheel shows a golden aura, the 500-coin slice pulses (`highlightKey`), the panel glows and says
+  "กำลังใช้บัฟ +ความเฮง ลุ้น 500 เหรียญ · เหลือ n/3 รอบ"; after the 3rd spin all of it switches off and a notice says the buff ended. State always comes from the latest spin response.
+
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its
    comment) and set:

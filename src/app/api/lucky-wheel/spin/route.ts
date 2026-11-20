@@ -4,6 +4,7 @@ import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { WHEEL_SPIN_COST } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { JACKPOT_EVERY_PAID_SPINS, JACKPOT_SEGMENT_INDEX, pickStandardReward } from "@/lib/wheel/rewards";
+import { applyLuckAfterSpin, readLuck } from "@/lib/wheel/luck-direct";
 import { spinDirect } from "@/lib/wheel/spin-direct";
 import { WHEEL_SEGMENTS, type SpinResponse, type WheelSegment } from "@/lib/wheel/segments";
 
@@ -83,6 +84,7 @@ async function spin() {
       res = await call(standard.segment, buffed.segment);
       if (res.error && isMissingFn(res.error)) {
         luckSigMissingUntil = Date.now() + 60_000; // migration 0010 not installed: fall back to the 0005 function
+        console.error("lucky-wheel: spin_wheel_cycle (luck-card signature) unavailable", { code: res.error.code, message: res.error.message });
         res = null;
       }
     }
@@ -119,17 +121,27 @@ async function spin() {
         buffApplied: r.buff_applied,
       };
     } else if (isMissingFn(error)) {
-      rpcRetryAt = Date.now() + 60_000; // migration 0004 not installed: use the fallback, never fail the spin
+      // NOT silent: this path knows nothing about wheel_state/luck cards. 42P01 = a table the RPC needs is missing (run migration 0011).
+      console.error("lucky-wheel: spin_wheel_cycle unavailable, using the no-RPC fallback", { code: error.code, message: error.message });
+      rpcRetryAt = Date.now() + 60_000; // use the fallback, never fail the spin
     } else {
       return rpcErrorResponse(error);
     }
   }
 
   if (!row) {
-    usedStandard = legacySafe(standard.segment);
+    // No-RPC fallback. It must still honour the luck-card buff, otherwise luck_buff_rounds never counts down.
+    const luck = await readLuck(admin, user.id); // null = luck columns don't exist (migration 0010 missing)
+    const buffActive = (luck?.buff ?? 0) > 0;
+    usedStandard = luck === null ? legacySafe(standard.segment) : buffActive ? buffed.segment : standard.segment;
     const direct = await spinDirect(admin, user.id, usedStandard, jackpot, WHEEL_SPIN_COST, JACKPOT_EVERY_PAID_SPINS);
     if (direct.error) return rpcErrorResponse(direct.error);
     row = direct.data;
+    if (luck !== null) {
+      const after = await applyLuckAfterSpin(admin, user.id, !row.jackpot && usedStandard.type === "luck_card");
+      if (after) row = { ...row, luckCards: after.cards, luckBuffRounds: after.buff };
+      row = { ...row, buffApplied: buffActive };
+    }
   }
 
   // Which segment really won: the jackpot, else the reward the database applied (it may be the buffed draw), else the ordinary draw.
