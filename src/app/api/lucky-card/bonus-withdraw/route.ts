@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { notifyAdminLine } from "@/lib/line-notify";
+import { getSiteUrl } from "@/lib/site-url";
 import type { LuckyCardBonusWithdrawResponse } from "@/lib/lucky-card/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
     const r = data as { request_id: string; amount_thb: number; bonus_total: number; already_pending: boolean };
     if (!r.already_pending) {
-      const site = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+      const site = getSiteUrl();
       await notifyAdminLine(
         [
           `💰 คำขอถอน [ยอดโบนัสสะสมเกม ดวงดี มีเฮ] ${r.amount_thb.toLocaleString("th-TH")} บาท`,

@@ -5,6 +5,7 @@ import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseRpcError } from "@/types/database";
 import { notifyAdminLine } from "@/lib/line-notify";
+import { getSiteUrl } from "@/lib/site-url";
 import { createLocalRequest, shouldUseLocalWithdrawals } from "@/lib/withdrawals-local";
 import { WITHDRAW_COINS } from "@/lib/withdrawals";
 
@@ -76,7 +77,7 @@ async function finish(
   body: { bankName: string; accountNumber: string; accountName: string },
   r: { request_id: string; balance: number; jackpot_withdrawals_available: number },
 ) {
-  const site = (process.env.NEXT_PUBLIC_APP_URL || "https://maemoosandy-7mp3.vercel.app").replace(/\/$/, "");
+  const site = getSiteUrl();
   await notifyAdminLine(
     [
       "💰 คำขอถอนรางวัลแจ็กพอต 5,000 บาท",
