@@ -59,6 +59,8 @@ async function WheelGate() {
       initialBalance={wallet?.balance ?? 0}
       initialCheckedIn={!!checkin.data}
       initialFreeReadings={wallet?.free_reading_tickets ?? 0}
+      initialLuckCards={wallet?.luck_cards ?? 0}
+      initialLuckBuffRounds={wallet?.luck_buff_rounds ?? 0}
       />
       {quota > 0 && <JackpotBanner count={quota} />}
     </>

@@ -18,7 +18,7 @@ type Timestamp = string;
 export type TransactionStatus = "pending" | "success" | "failed" | "rejected";
 export type WithdrawalStatus = "pending" | "approved" | "rejected";
 export type FortuneType = "tarot" | "birthdate";
-export type RewardType = "coins" | "free_reading" | "none";
+export type RewardType = "coins" | "free_reading" | "luck_card" | "none";
 export type LedgerReason =
   | "tarot"
   | "birthdate"
@@ -65,6 +65,10 @@ export type Database = {
           lucky_card_bonus_total: number;
           /** Consecutive rounds without a bonus/secret (migration 0008); drives the bonus guarantee. */
           lucky_card_dry_rounds: number;
+          /** "การ์ด +ความเฮง" held (migration 0010) */
+          luck_cards: number;
+          /** rounds left on the +ความเฮง buff */
+          luck_buff_rounds: number;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -76,6 +80,8 @@ export type Database = {
           jackpot_withdrawals_available?: number;
           lucky_card_bonus_total?: number;
           lucky_card_dry_rounds?: number;
+          luck_cards?: number;
+          luck_buff_rounds?: number;
         };
         Update: {
           balance?: number;
@@ -302,8 +308,15 @@ export type Database = {
           p_jackpot_key: string;
           p_jackpot_type: RewardType;
           p_jackpot_value: number;
+          p_buff_reward_key?: string;
+          p_buff_reward_type?: RewardType;
+          p_buff_reward_value?: number;
         };
         Returns: Json; // { spin_log_id, paid, jackpot, paid_spin_number, reward_key, balance, spin_tickets, free_reading_tickets }
+      };
+      use_luck_card: {
+        Args: { p_user_id: string; p_rounds?: number; p_min_balance?: number };
+        Returns: Json; // { luck_cards, luck_buff_rounds }
       };
       request_jackpot_withdrawal: {
         Args: { p_user_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
@@ -376,6 +389,8 @@ export const RPC_ERRORS = [
   "INVALID_CARD",
   "INVALID_COST",
   "BONUS_NOT_ENOUGH",
+  "NO_LUCK_CARDS",
+  "BUFF_ALREADY_ACTIVE",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

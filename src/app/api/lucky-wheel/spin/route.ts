@@ -5,7 +5,7 @@ import { WHEEL_SPIN_COST } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { JACKPOT_EVERY_PAID_SPINS, JACKPOT_SEGMENT_INDEX, pickStandardReward } from "@/lib/wheel/rewards";
 import { spinDirect } from "@/lib/wheel/spin-direct";
-import { WHEEL_SEGMENTS, type SpinResponse } from "@/lib/wheel/segments";
+import { WHEEL_SEGMENTS, type SpinResponse, type WheelSegment } from "@/lib/wheel/segments";
 
 /** When the RPC is missing (migration 0004 not run) we use the no-migration path; re-probe the RPC every minute. */
 let rpcRetryAt = 0;
@@ -28,38 +28,97 @@ export async function POST() {
   }
 }
 
+const RETRY = WHEEL_SEGMENTS.find((s) => s.key === "retry_a")!;
+const isMissingFn = (e: { code?: string }) => e.code === "PGRST202" || e.code === "42883" || e.code === "42P01";
+/** Before migration 0010 the database does not know the 'luck_card' reward type: such a draw becomes "retry" instead of failing. */
+const legacySafe = (seg: WheelSegment): WheelSegment => (seg.type === "luck_card" ? RETRY : seg);
+/** When migration 0010 (luck cards) is missing, skip the new-signature call for a minute instead of trying it on every spin. */
+let luckSigMissingUntil = 0;
+
+type Row = {
+  paid: boolean;
+  jackpot: boolean;
+  balance: number;
+  spinTickets: number;
+  freeReadingTickets: number;
+  rewardKey?: string;
+  luckCards?: number;
+  luckBuffRounds?: number;
+  buffApplied?: boolean;
+};
+
 async function spin() {
   const { user, response: unauthorized } = await requireUser();
   if (!user) return unauthorized;
   const limited = rateLimitResponse(user.id, "wheelSpin");
   if (limited) return limited;
 
+  // Two ordinary draws (crypto): normal odds and luck-card-buffed odds. The database decides under the wallet lock which one
+  // applies (the buff is stored per player), so the client can never choose and two tabs can't both use the same buff round.
   const standard = pickStandardReward();
+  const buffed = pickStandardReward({ buffed: true });
   const jackpot = WHEEL_SEGMENTS[JACKPOT_SEGMENT_INDEX];
 
   const admin = createAdminClient();
-  let row: { paid: boolean; jackpot: boolean; balance: number; spinTickets: number; freeReadingTickets: number } | null = null;
+  let row: Row | null = null;
+  let usedStandard: WheelSegment = standard.segment;
 
-  if (Date.now() >= rpcRetryAt) {
-    const { data, error } = await admin.rpc("spin_wheel_cycle", {
+  const call = (std: WheelSegment, buff?: WheelSegment) =>
+    admin.rpc("spin_wheel_cycle", {
       p_user_id: user.id,
       p_cost: WHEEL_SPIN_COST,
       p_jackpot_every: JACKPOT_EVERY_PAID_SPINS,
-      p_reward_key: standard.segment.key,
-      p_reward_type: standard.segment.type,
-      p_reward_value: standard.segment.value,
+      p_reward_key: std.key,
+      p_reward_type: std.type,
+      p_reward_value: std.value,
       p_jackpot_key: jackpot.key,
       p_jackpot_type: jackpot.type,
       p_jackpot_value: jackpot.value,
+      ...(buff ? { p_buff_reward_key: buff.key, p_buff_reward_type: buff.type, p_buff_reward_value: buff.value } : {}),
     });
+
+  if (Date.now() >= rpcRetryAt) {
+    let res: Awaited<ReturnType<typeof call>> | null = null;
+    if (Date.now() >= luckSigMissingUntil) {
+      res = await call(standard.segment, buffed.segment);
+      if (res.error && isMissingFn(res.error)) {
+        luckSigMissingUntil = Date.now() + 60_000; // migration 0010 not installed: fall back to the 0005 function
+        res = null;
+      }
+    }
+    if (!res) {
+      usedStandard = legacySafe(standard.segment);
+      res = await call(usedStandard);
+    }
+    const { data, error } = res;
     if (!error) {
-      const r = data as { paid: boolean; jackpot: boolean; balance: number; spin_tickets: number; free_reading_tickets: number };
+      const r = data as {
+        paid: boolean;
+        jackpot: boolean;
+        balance: number;
+        spin_tickets: number;
+        free_reading_tickets: number;
+        reward_key?: string;
+        luck_cards?: number;
+        luck_buff_rounds?: number;
+        buff_applied?: boolean;
+      };
       if (r.jackpot && (data as { jackpot_withdrawals_available?: number }).jackpot_withdrawals_available === undefined) {
         // migration 0005 not installed: the jackpot was paid but no withdrawal quota was granted
         console.error("lucky-wheel: JACKPOT WON without withdrawal quota (run migration 0005)", { userId: user.id });
       }
-      row = { paid: r.paid, jackpot: r.jackpot, balance: r.balance, spinTickets: r.spin_tickets, freeReadingTickets: r.free_reading_tickets };
-    } else if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
+      row = {
+        paid: r.paid,
+        jackpot: r.jackpot,
+        balance: r.balance,
+        spinTickets: r.spin_tickets,
+        freeReadingTickets: r.free_reading_tickets,
+        rewardKey: r.reward_key,
+        luckCards: r.luck_cards,
+        luckBuffRounds: r.luck_buff_rounds,
+        buffApplied: r.buff_applied,
+      };
+    } else if (isMissingFn(error)) {
       rpcRetryAt = Date.now() + 60_000; // migration 0004 not installed: use the fallback, never fail the spin
     } else {
       return rpcErrorResponse(error);
@@ -67,12 +126,19 @@ async function spin() {
   }
 
   if (!row) {
-    const direct = await spinDirect(admin, user.id, standard.segment, jackpot, WHEEL_SPIN_COST, JACKPOT_EVERY_PAID_SPINS);
+    usedStandard = legacySafe(standard.segment);
+    const direct = await spinDirect(admin, user.id, usedStandard, jackpot, WHEEL_SPIN_COST, JACKPOT_EVERY_PAID_SPINS);
     if (direct.error) return rpcErrorResponse(direct.error);
     row = direct.data;
   }
 
-  const segmentIndex = row.jackpot ? JACKPOT_SEGMENT_INDEX : standard.segmentIndex;
+  // Which segment really won: the jackpot, else the reward the database applied (it may be the buffed draw), else the ordinary draw.
+  const appliedIndex = row.rewardKey ? WHEEL_SEGMENTS.findIndex((s) => s.key === row.rewardKey) : -1;
+  const segmentIndex = row.jackpot
+    ? JACKPOT_SEGMENT_INDEX
+    : appliedIndex >= 0
+      ? appliedIndex
+      : WHEEL_SEGMENTS.findIndex((s) => s.key === usedStandard.key);
   const segment = WHEEL_SEGMENTS[segmentIndex];
 
   return NextResponse.json<SpinResponse>({
@@ -81,6 +147,9 @@ async function spin() {
     balance: row.balance,
     spinTickets: row.spinTickets,
     freeReadingTickets: row.freeReadingTickets,
+    luckCards: row.luckCards,
+    luckBuffRounds: row.luckBuffRounds,
+    buffApplied: row.buffApplied,
     paid: row.paid,
     cost: row.paid ? WHEEL_SPIN_COST : 0,
   });

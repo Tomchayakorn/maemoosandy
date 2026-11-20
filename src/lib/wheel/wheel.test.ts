@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { WHEEL_SPIN_COST } from "../pricing";
 import {
+  buffedWeights,
   expectedReturnPerPaidSpin,
   isJackpotPaidSpin,
   JACKPOT_EVERY_PAID_SPINS,
+  luckCardValueCoins,
   JACKPOT_SEGMENT_INDEX,
   pickStandardReward,
   resolveSpin,
@@ -27,20 +29,21 @@ function odds(): Record<string, number> {
 }
 
 describe("wheel config", () => {
-  it("has 8 segments, one weight each; ordinary weights total 1,000", () => {
+  it("has 8 segments, one weight each; ordinary weights total 10,000", () => {
     expect(WHEEL_SEGMENTS).toHaveLength(8);
     expect(SEGMENT_WEIGHTS).toHaveLength(8);
-    expect(TOTAL_WEIGHT).toBe(1000);
+    expect(TOTAL_WEIGHT).toBe(10000);
   });
 
   it("matches the agreed ordinary odds, with the jackpot at weight 0", () => {
     expect(odds()).toEqual({
-      none: 688,
-      "coins:25": 230,
-      "coins:50": 55,
-      "coins:150": 10,
-      "coins:500": 2,
-      "free_reading:1": 15,
+      none: 6730,
+      "coins:25": 2300,
+      "coins:50": 550,
+      "luck_card:1": 150,
+      "coins:150": 100,
+      "coins:500": 20,
+      "free_reading:1": 150,
       "coins:5000": 0,
     });
   });
@@ -175,5 +178,47 @@ describe("return to players (target ≈ 35%, owner keeps ≈ 65%)", () => {
     const v = (k: string) => WHEEL_SEGMENTS.find((x) => x.key === k)?.value;
     expect(v("coins_25")).toBe(WHEEL_SPIN_COST / 2);
     expect(v("coins_50")).toBe(WHEEL_SPIN_COST);
+  });
+});
+
+describe("luck card (+ความเฮง) odds", () => {
+  const i500 = WHEEL_SEGMENTS.findIndex((s) => s.key === "coins_500");
+  const iRetry = WHEEL_SEGMENTS.findIndex((s) => s.key === "retry_a");
+
+  it("the wheel has exactly one retry slice and one luck-card slice", () => {
+    expect(WHEEL_SEGMENTS.filter((s) => s.type === "none")).toHaveLength(1);
+    expect(WHEEL_SEGMENTS.filter((s) => s.type === "luck_card")).toHaveLength(1);
+  });
+
+  it("buffed weights: 500-coin x1.3, the extra comes out of retry only, total unchanged", () => {
+    const b = buffedWeights();
+    expect(b[i500]).toBe(Math.round(SEGMENT_WEIGHTS[i500] * 1.3)); // 20 -> 26
+    expect(b[iRetry]).toBe(SEGMENT_WEIGHTS[iRetry] - (b[i500] - SEGMENT_WEIGHTS[i500]));
+    expect(b.reduce((a, c) => a + c, 0)).toBe(TOTAL_WEIGHT);
+    b.forEach((w, i) => {
+      if (i !== i500 && i !== iRetry) expect(w).toBe(SEGMENT_WEIGHTS[i]); // 25/50/150/free/card/jackpot untouched
+    });
+    expect(b[JACKPOT_SEGMENT_INDEX]).toBe(0);
+  });
+
+  it("buffed rolls map to the 500-coin slice 30% more often", () => {
+    const b = buffedWeights();
+    const count = (w: readonly number[]) => {
+      let n = 0;
+      for (let r = 0; r < TOTAL_WEIGHT; r++) if (segmentForRoll(r, w) === i500) n++;
+      return n;
+    };
+    expect(count(b) / count(SEGMENT_WEIGHTS)).toBeCloseTo(1.3, 5);
+  });
+
+  it("pickStandardReward({ buffed: true }) is valid and never the jackpot", () => {
+    for (let i = 0; i < 3000; i++) {
+      const { segmentIndex } = pickStandardReward({ buffed: true });
+      expect(segmentIndex).not.toBe(JACKPOT_SEGMENT_INDEX);
+    }
+  });
+
+  it("a luck card is worth ~0.9 coins on average (3 rounds x 0.06% extra x 500), a tiny share of the budget", () => {
+    expect(luckCardValueCoins()).toBeCloseTo(0.9, 5);
   });
 });

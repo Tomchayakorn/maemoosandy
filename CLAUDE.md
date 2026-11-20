@@ -140,9 +140,9 @@ public/promptpay-qr.jpg         # owner's static PromptPay QR (ttb screenshot, n
 - Tarot (3 cards): 99 coins · Birthdate + name: 199 coins · Lucky wheel: 1 free spin ticket, then **50 coins per spin, unlimited** (was 99 until 2026-11-20) (`WHEEL_SPIN_COST` in `src/lib/pricing.ts`)
 - New user wallet: balance 0, spin_tickets 1
 - Top-up packages: 50฿→50, 99฿→100, 199฿→210, 299฿→330, 499฿→540, 999฿→1,050 coins
-- Wheel odds, ordinary spins (weights of 1,000; jackpot weight 0): retry 688 (two slices) · 25 coins 230 (23%) · 50 coins 55 (5.5%) · 150 coins 10 (1%) · 500 coins 2 (0.2%) · free reading ticket 15 (1.5%) — 31.2% of ordinary spins win something.
+- Wheel odds, ordinary spins (weights of 10,000; jackpot weight 0): retry 6,730 · 25 coins 2,300 (23%) · 50 coins 550 (5.5%) · "การ์ด +ความเฮง" 150 (1.5%) · 150 coins 100 (1%) · 500 coins 20 (0.2%) · free reading ticket 150 (1.5%) — 31.2% of spins win coins/free reading, 32.7% incl. the card.
   **5,000-coin jackpot = every 1,000th PAID (50-coin) spin, global counter `wheel_state.paid_spin_count`; free-ticket spins never count and never win it** (RPC `spin_wheel_cycle`, migration 0004; the cycle length is a parameter, no SQL change needed).
-  Return ≈ 17.5 coins per paid spin (12.5 ordinary + 5.0 jackpot) = **34.9% (owner keeps ≈ 65%)**, free-reading ticket valued at 99 coins; a free-ticket spin costs the owner ≈ 12.5 coins. Check with `returnRatio()` (unit-tested 34–36%).
+  Return ≈ 17.49 coins per paid spin (12.49 ordinary incl. 0.9×1.5% for the card + 5.0 jackpot) = **35.0% (owner keeps ≈ 65%)**, free-reading ticket valued at 99 coins; a free-ticket spin costs the owner ≈ 12.5 coins. Check with `returnRatio()` (unit-tested 34–36%).
 - Daily check-in: +1 spin ticket per Bangkok calendar day
 
 ## Design (brand)
@@ -268,6 +268,14 @@ wait for the owner's confirmation before starting the next.
 - **Wheel re-priced 2026-11-20 (code done, awaiting owner review):** spin 99 → **50 coins**; prizes 10/20/50 → **25 (half back) / 50 (break-even) / 150 / 500**, free reading + 5,000 jackpot kept; jackpot cycle 200 → 500 → **1,000** paid spins because at a 50-coin price
   one jackpot per 200 spins alone would return 50% of revenue; 1,000 keeps it at 10% and lets the 25/50 prizes hit ~31% of spins. Weights/EV in `src/lib/wheel/rewards.ts`. No migration needed (the RPC takes cost, prizes ≤ 1,000 and the cycle as parameters).
   Caveats: the no-migration fallback `spin-direct.ts` ranks paid spins by ledger rows of exactly −cost, so it would restart its count at the new price (production uses the RPC counter `wheel_state`, unaffected).
+
+- **Wheel "การ์ด +ความเฮง" (luck card, code done 2026-11-21, awaiting owner review):** the second "ลองใหม่" slice became a luck-card slice (1.5%). Winning one adds a card (`wallets.luck_cards`); the player presses "ใช้การ์ด"
+  (`POST /api/lucky-wheel/use-card` → RPC `use_luck_card`, refused while a buff runs: BUFF_ALREADY_ACTIVE / NO_LUCK_CARDS) → `wallets.luck_buff_rounds = 3`. For the next 3 spins (free or paid, jackpot spin included) the 500-coin weight is ×1.3 (20 → 26 of 10,000),
+  the extra taken from "retry" only. The route draws BOTH an ordinary and a buffed reward (crypto) and passes the buffed one as `p_buff_reward_*`; `spin_wheel_cycle` (migration **0010_wheel_luck_card.sql**, run after 0009) picks under the wallet lock and returns the applied
+  `reward_key`, `luck_cards`, `luck_buff_rounds`, `buff_applied`. Without 0010 the route falls back to the 0005 function and turns a luck-card draw into "retry". Client-safe constants/model: `src/lib/wheel/luck-card.ts` (BUFF_ROUNDS=3, BUFF_MULTIPLIER=1.3); odds/EV: `rewards.ts`
+  (`buffedWeights()`, `luckCardValueCoins()` = 0.9 coins). UI: panel with card count + "ใช้การ์ด" + "บัฟ +ความเฮง เหลือ n/3 รอบ" (only shown when a card/buff exists).
+  **Coins rule:** a card won with < 50 coins is kept (`luck_cards` is credited with the prize, no balance condition). "ใช้การ์ด" needs a free ticket OR ≥ 50 coins: `use_luck_card(p_user_id, p_rounds, p_min_balance)` raises INSUFFICIENT_COINS otherwise (card not consumed),
+  the UI disables the button and shows a "เติมเหรียญ" link; a running buff never expires by time and a spin that fails for lack of coins rolls back (no round used). 0010 is re-runnable (drops the old 2-arg `use_luck_card`). Verified in the browser pane at 375×812 with mocked APIs; the SQL is NOT tested against a real DB.
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its

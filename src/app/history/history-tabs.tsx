@@ -48,6 +48,7 @@ function Empty({ text, href, cta }: { text: string; href: string; cta: string })
 function spinLabel(s: Spin): string {
   if (s.reward_type === "coins") return `${s.reward_value} เหรียญโบนัส`;
   if (s.reward_type === "free_reading") return "สิทธิ์ดูดวงฟรี";
+  if (s.reward_type === "luck_card") return "การ์ด +ความเฮง";
   return "ลองใหม่อีกครั้ง";
 }
 

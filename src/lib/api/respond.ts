@@ -32,6 +32,8 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   INVALID_OUTCOME: { status: 400, message: "ผลรางวัลไม่ถูกต้อง" },
   INVALID_CARD: { status: 400, message: "เลือกไพ่ไม่ถูกต้อง" },
   BONUS_NOT_ENOUGH: { status: 400, message: "ยอดโบนัสสะสมยังไม่ถึง 1,000 เหรียญ ยังถอนไม่ได้ค่ะ" },
+  NO_LUCK_CARDS: { status: 400, message: "ยังไม่มีการ์ด +ความเฮง ให้ใช้ค่ะ" },
+  BUFF_ALREADY_ACTIVE: { status: 409, message: "บัฟ +ความเฮง กำลังทำงานอยู่ ใช้การ์ดใบถัดไปได้เมื่อบัฟหมดค่ะ" },
   INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
 };
 
