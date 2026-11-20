@@ -249,7 +249,7 @@ wait for the owner's confirmation before starting the next.
 
 - **Lucky card bonus cash-out (code done 2026-11-20, awaiting owner review):** bonus coins (100/300/500) still go to the main wallet AND add to `wallets.lucky_card_bonus_total` (same RPC statement, same wallet lock).
   Progress bar + "ถอน 1,000 บาท" button on /lucky-card; withdraw = `POST /api/lucky-card/bonus-withdraw` (bank details only) → RPC `request_lucky_card_bonus_withdrawal` (fixed 1,000, idempotent while one is pending;
-  partial unique index = one pending per user) → `withdrawal_requests.source='lucky_card_bonus'` + LINE push to admin. Admin approve = counter −1,000 (main balance untouched); reject/cancel = status only.
+  partial unique index = one pending per user) → `withdrawal_requests.source='lucky_card_bonus'` + LINE push to admin. (Since 0009) the 1,000 are RESERVED at request time (counter −1,000, `withdrawal_requests.bonus_reserved`); admin approve = status only; reject = counter +1,000 back. Main balance never touched.
   Odds now (per 10,000): natural 100-coin 8 · 300-coin 55 · 500-coin 1 · secret 2 · message 9,934 + bonus guarantee → bonus counted twice + secret = 7.005 per 20 (35% back, 65% kept; formula 65/35, set 2026-11-20) — `expectedReturnPer20()` in `lucky-card-config.ts`.
   **MIGRATION `0007_lucky_card_bonus_withdrawal.sql` MUST BE RUN after 0006** (also backfills the counter from past plays once). Secret prize "เทพประทานทรัพย์" kept as is.
 
@@ -257,6 +257,12 @@ wait for the owner's confirmation before starting the next.
   Counter `wallets.lucky_card_dry_rounds`; the guarantee is applied INSIDE `play_lucky_card` under the wallet lock (race-free) — the route still draws the natural result and passes `p_pity_after/p_pity_bonus`;
   if migration **0008_lucky_card_pity.sql** isn't installed yet (PGRST202) the route falls back to the old behaviour (no guarantee). Natural 100-coin weight was lowered to pay for the guarantee (and later for the 0.55% 300-coin tier) so the total stays on target:
   `expectedReturnPer20()` is the analytic renewal-reward value (7.005 now), pinned by a test; a seeded 1.5M-round simulation test checks ≤50 dry rounds and ~7.0. `resolvePity()` in `lucky-card/draw.ts` is the reference model.
+
+- **Bonus cash-out v2 — reserve at request + "เก็บไว้ก่อน" (code done 2026-11-20):** migration **0009_lucky_card_bonus_reserve.sql** (run after 0008; also converts any still-pending 0007-style request once).
+  `request_lucky_card_bonus_withdrawal` locks the wallet FOR UPDATE, returns the existing pending request if any (idempotent, nothing reserved twice), else needs counter ≥ 1,000 and deducts 1,000 immediately; partial unique index = one pending per user.
+  UI: `BonusWithdrawAction` (shared by /lucky-card and /withdraw): ready → "ถอน 1,000 บาท" + (game only) "เก็บไว้ก่อน / ถอนทีหลัง" (UI-only collapse, counter untouched, reopen any time); pending → "มีรายการขอถอนกำลังรอตรวจสอบ" + disabled button;
+  re-syncs on tab focus (router.refresh) so a 2nd tab/device sees pending. /withdraw shows `BonusWithdrawCard` (evidence: remaining total, ready/pending) when total ≥ 1,000 or a request is pending, and history rows carry a source label (`WITHDRAW_SOURCE_LABEL`).
+  `lucky-card/bonus-ledger.ts` = pure reference model of the SQL rules, tested for double click / 2 tabs / approve / reject / double review / conservation invariant (the SQL itself is NOT tested against a real DB).
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its

@@ -92,7 +92,7 @@ async function Data() {
               {r.source === "lucky_card_bonus" && (
                 <>
                   <dt>ยอดโบนัสสะสมเกม</dt>
-                  <dd>{w?.lucky_card_bonus_total !== undefined ? `${w.lucky_card_bonus_total.toLocaleString("th-TH")} เหรียญ (อนุมัติแล้วจะหักออก 1,000)` : "-"}</dd>
+                  <dd>{w?.lucky_card_bonus_total !== undefined ? `${w.lucky_card_bonus_total.toLocaleString("th-TH")} เหรียญ (หัก 1,000 ไว้แล้วตั้งแต่ตอนขอถอน ปฏิเสธ = คืนให้)` : "-"}</dd>
                 </>
               )}
               <dt>กระเป๋าตอนนี้</dt>

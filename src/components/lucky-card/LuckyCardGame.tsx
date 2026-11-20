@@ -8,10 +8,11 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { getLuckyCardMessage, LUCKY_CARD_CATEGORY_LABEL } from "@/data/lucky-card-messages";
-import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress, bonusWithdrawState } from "@/lib/lucky-card/bonus";
+import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress } from "@/lib/lucky-card/bonus";
 import type { LuckyCardOutcome, LuckyCardPlayResponse } from "@/lib/lucky-card/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
+import { BonusWithdrawAction } from "./BonusWithdrawAction";
 import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
 
 /**
@@ -339,11 +340,8 @@ function ResultView({
   );
 }
 
-/** Progress towards the 1,000-coin cash-out + the withdraw button. The server re-checks everything. */
+/** Progress towards the 1,000-coin cash-out + the withdraw action. The server re-checks everything. */
 function BonusMeter({ total, pending, onRequested }: { total: number; pending: boolean; onRequested: () => void }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const state = bonusWithdrawState(total, pending);
   const pct = Math.round(bonusProgress(total) * 100);
 
   return (
@@ -369,35 +367,9 @@ function BonusMeter({ total, pending, onRequested }: { total: number; pending: b
       </div>
       <p className="text-xs text-cream-muted">
         ครบ {formatCoins(BONUS_TARGET)} เหรียญ ถอนเป็นเงิน {formatCoins(BONUS_WITHDRAW_THB)} บาท · เหรียญโบนัสยังเข้ากระเป๋าหลักตามปกติ
-        การถอนจะหักเฉพาะยอดสะสมนี้ ไม่กระทบเหรียญในกระเป๋า
+        เมื่อกดขอถอน ระบบจะกันยอดสะสม {formatCoins(BONUS_TARGET)} ไว้ทันที (คืนให้ถ้าแอดมินปฏิเสธ) ไม่กระทบเหรียญในกระเป๋า
       </p>
-
-      {state.kind === "pending" && (
-        <div className="rounded-xl border border-gold/30 bg-gold/5 px-3 py-2.5 text-center text-sm text-gold-light">
-          ส่งคำขอถอนแล้ว รอแอดมินตรวจสอบและโอนเงินค่ะ ✨
-        </div>
-      )}
-      {state.kind === "locked" && (
-        <GoldButton variant="outline" disabled className="w-full">
-          สะสมอีก {formatCoins(state.remaining)} เหรียญ จึงถอนได้
-        </GoldButton>
-      )}
-      {state.kind === "ready" &&
-        (open ? (
-          <PrizeWithdrawForm
-            amountThb={BONUS_WITHDRAW_THB}
-            onCancel={() => setOpen(false)}
-            onDone={() => {
-              setOpen(false);
-              onRequested();
-              router.refresh();
-            }}
-          />
-        ) : (
-          <GoldButton onClick={() => setOpen(true)} className="w-full">
-            ถอน {formatCoins(BONUS_WITHDRAW_THB)} บาท
-          </GoldButton>
-        ))}
+      <BonusWithdrawAction total={total} pending={pending} allowDefer onRequested={onRequested} />
     </div>
   );
 }

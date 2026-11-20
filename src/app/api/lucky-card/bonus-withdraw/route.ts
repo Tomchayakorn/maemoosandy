@@ -19,7 +19,7 @@ const Body = z.object({
 /**
  * Request the cash-out of 1,000 accumulated "ดวงดี มีเฮ" bonus coins (= 1,000 THB). The body carries ONLY bank details:
  * amount, eligibility and the user all come from the server. The RPC is idempotent while a request is pending, so a double
- * click or a lost connection returns the same request instead of creating another. Nothing is deducted until the admin approves.
+ * click or a lost connection returns the same request instead of creating another. The 1,000 accumulated coins are reserved (deducted) right away and refunded only if the admin rejects.
  */
 export async function POST(request: Request) {
   try {
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       await notifyAdminLine(
         [
           `💰 คำขอถอน [ยอดโบนัสสะสมเกม ดวงดี มีเฮ] ${r.amount_thb.toLocaleString("th-TH")} บาท`,
-          `ประเภท: โบนัสสะสมครบ 1,000 เหรียญ (หักเฉพาะยอดสะสมของเกม ไม่กระทบกระเป๋าหลัก)`,
+          `ประเภท: โบนัสสะสมครบ 1,000 เหรียญ (หักยอดสะสมของเกมไว้แล้ว 1,000 ไม่กระทบกระเป๋าหลัก ปฏิเสธ = คืนให้)`,
           `รหัสอ้างอิง: ${r.request_id}`,
           `ธนาคาร: ${body.bankName}`,
           `เลขที่บัญชี: ${body.accountNumber}`,

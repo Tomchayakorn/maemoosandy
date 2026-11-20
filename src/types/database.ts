@@ -205,6 +205,8 @@ export type Database = {
           ledger_id: string | null;
           source: "jackpot" | "lucky_card" | "lucky_card_bonus";
           prize_id: string | null;
+          /** true while a lucky_card_bonus request holds 1,000 reserved coins (migration 0009) */
+          bonus_reserved: boolean;
           reviewed_by: string | null;
           reviewed_at: Timestamp | null;
           created_at: Timestamp;

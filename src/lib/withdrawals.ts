@@ -8,6 +8,14 @@ export const WITHDRAW_STATUS_LABEL = {
   rejected: "ปฏิเสธ (คืนเหรียญแล้ว)",
 } as const;
 
+/** Label of a withdrawal request by where it came from (shown in the history and the admin page). */
+export const WITHDRAW_SOURCE_LABEL = {
+  jackpot: "ถอนรางวัลแจ็กพอตกงล้อ (5,000 เหรียญ = 5,000 บาท)",
+  lucky_card: "ถอนรางวัลลับ “เทพประทานทรัพย์” (ดวงดี มีเฮ)",
+  lucky_card_bonus: "ถอนโบนัสสะสม 1,000 เหรียญ = 1,000 บาท (ดวงดี มีเฮ)",
+} as const;
+export type WithdrawSource = keyof typeof WITHDRAW_SOURCE_LABEL;
+
 export const THAI_BANKS = [
   "กสิกรไทย (KBank)",
   "ไทยพาณิชย์ (SCB)",

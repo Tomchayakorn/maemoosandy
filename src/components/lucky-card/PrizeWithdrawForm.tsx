@@ -18,12 +18,15 @@ export function PrizeWithdrawForm({
   amountThb,
   onDone,
   onCancel,
+  onFailed,
 }: {
   /** A "เทพประทานทรัพย์" prize id; omit it to withdraw the accumulated bonus (1,000 coins = 1,000 THB). */
   prizeId?: string;
   amountThb: number;
   onDone: (r: LuckyCardWithdrawResponse) => void;
   onCancel?: () => void;
+  /** The server refused or the network failed (so the parent can re-sync the real status). */
+  onFailed?: () => void;
 }) {
   const [bankName, setBankName] = useState<string>(THAI_BANKS[0]);
   const [accountNumber, setAccountNumber] = useState("");
@@ -45,11 +48,13 @@ export function PrizeWithdrawForm({
       const json = (await res.json().catch(() => null)) as LuckyCardWithdrawResponse | { error?: { message?: string } } | null;
       if (!res.ok || !json || !("requestId" in json)) {
         setError((json && "error" in json && json.error?.message) || "ส่งคำขอไม่สำเร็จ กรุณาลองใหม่");
+        onFailed?.();
         return;
       }
       onDone(json);
     } catch {
       setError("เชื่อมต่อไม่ได้ กรุณาลองใหม่");
+      onFailed?.();
     } finally {
       setBusy(false);
     }
