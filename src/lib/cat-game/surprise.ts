@@ -15,6 +15,14 @@ export function catSurpriseState(balance: number, playedToday: boolean): Surpris
   return balance >= CAT_GAME_COST ? "offer" : "low";
 }
 
+/**
+ * What to show right now: the eligibility state, unless something else is on screen (rules pop-up, a spin / round in progress,
+ * a result card) — then nothing yet; the caller re-evaluates when the blocker goes away.
+ */
+export function surpriseToShow(balance: number, playedToday: boolean, blocked: boolean): SurpriseState | null {
+  return blocked ? null : catSurpriseState(balance, playedToday);
+}
+
 /** Dismissal is remembered per user + state + Bangkok day, for this browser session only, so a closed pop-up does not come back. */
 export function surpriseDismissKey(userId: string, state: SurpriseState, bangkokDay: string): string {
   return `bnm:cat-surprise:${userId}:${state}:${bangkokDay}`;

@@ -12,6 +12,7 @@ import { GUARANTEE_DRY_COINS, GUARANTEE_DRY_ROUNDS, GUARANTEE_EVERY_COINS, GUARA
 import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress } from "@/lib/lucky-card/bonus";
 import type { LuckyCardOutcome, LuckyCardPlayResponse } from "@/lib/lucky-card/types";
 import { formatCoins } from "@/lib/pricing";
+import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
 import { walletBus } from "@/lib/wallet-bus";
 import { BonusWithdrawAction } from "./BonusWithdrawAction";
 import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
@@ -71,6 +72,8 @@ export function LuckyCardGame({
     balanceRef.current = balance;
   }, [balance]);
   useEffect(() => () => walletBus.release(balanceRef.current), []);
+
+  useSurpriseBlock(phase.name !== "pick"); // no cat-game surprise while a round or its result is on screen
 
   const notEnough = balance < LUCKY_CARD_COST;
 

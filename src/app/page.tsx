@@ -1,10 +1,5 @@
 import { Suspense } from "react";
-import { connection } from "next/server";
-import { CatSurprise } from "@/components/cat-game/CatSurprise";
-import { bangkokDate } from "@/lib/cat-game/config";
-import { catSurpriseState } from "@/lib/cat-game/surprise";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import { getMyWallet } from "@/lib/wallet";
+import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { Hero } from "@/components/home/Hero";
 import { ServiceCard } from "@/components/home/ServiceCard";
 import { GoldButton } from "@/components/ui/GoldButton";
@@ -19,7 +14,7 @@ export default function Home() {
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col pb-12 sm:max-w-2xl">
       <Hero />
       <Suspense fallback={null}>
-        <CatSurpriseGate />
+        <CatSurpriseHost />
       </Suspense>
 
       <section className="flex flex-col gap-4 px-4" aria-labelledby="services-title">
@@ -116,19 +111,3 @@ export default function Home() {
   );
 }
 
-/** Shows the น้องเหมียว 9 ชีวิต surprise when the player has 9..20 coins and has not used today's play. Reads only (RLS, own rows). */
-async function CatSurpriseGate() {
-  await connection();
-  const user = await getCurrentUser();
-  if (!user) return null;
-  const day = bangkokDate(new Date());
-  const [wallet, played] = await Promise.all([
-    getMyWallet(),
-    (await createClient()).from("cat_game_plays").select("id").eq("play_date", day).maybeSingle(),
-  ]);
-  // table missing (migration 0016 not run) → the game is not available, so no pop-up either
-  if (!wallet || played.error) return null;
-  const state = catSurpriseState(wallet.balance, !!played.data);
-  if (!state) return null;
-  return <CatSurprise userId={user.id} state={state} bangkokDay={day} balance={wallet.balance} />;
-}

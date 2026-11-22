@@ -10,6 +10,7 @@ import { MysticCard } from "@/components/ui/MysticCard";
 import { formatCoins, WHEEL_SPIN_COST } from "@/lib/pricing";
 import { FantasyWheel } from "@/components/wheel/FantasyWheel";
 import { SpinFx, type SpinFxState } from "@/components/wheel/SpinFx";
+import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
 import { walletBus } from "@/lib/wallet-bus";
 import { wheelSfx, type SweepDir, type WheelFx } from "@/lib/audio/wheelSfx";
 import { WheelCashPanel } from "@/components/wheel/WheelCashPanel";
@@ -69,6 +70,7 @@ export function WheelExperience({
   const [result, setResult] = useState<SpinResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useSurpriseBlock(spinning || !!result); // no cat-game surprise during a spin or while the result is on screen
 
   const [fx, setFx] = useState<SpinFxState | null>(null);
   const wheelBox = useRef<HTMLDivElement>(null);

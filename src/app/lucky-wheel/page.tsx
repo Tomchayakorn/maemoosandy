@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { RulesGate } from "@/components/rules/RulesGate";
 import { WheelRules } from "@/components/rules/WheelRules";
 import { WheelExperience } from "./wheel-experience";
@@ -29,6 +30,9 @@ export default function LuckyWheelPage() {
       </header>
       <Suspense fallback={null}>
         <RulesForUser />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CatSurpriseHost />
       </Suspense>
 
       <Suspense fallback={<div className="mx-auto aspect-square w-full animate-pulse rounded-full bg-gold/5" />}>

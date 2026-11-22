@@ -161,3 +161,46 @@ describe("matchUser", () => {
     expect(matchUser(users, "")).toBeNull();
   });
 });
+
+import { _resetSurpriseBlocks, addSurpriseBlock, hasSurpriseBlock, removeSurpriseBlock, subscribeSurpriseBlock } from "./surprise-block";
+import { surpriseToShow } from "./surprise";
+
+describe("surprise appears live and never on top of another pop-up", () => {
+  it("a round that leaves 40 coins shows the offer once the result is closed, not before", () => {
+    _resetSurpriseBlocks();
+    expect(surpriseToShow(70, false, hasSurpriseBlock())).toBeNull(); // 70 coins: nothing
+    addSurpriseBlock("round"); // the round / result is on screen
+    expect(surpriseToShow(40, false, hasSurpriseBlock())).toBeNull(); // balance is now 40 but the result is showing: wait
+    removeSurpriseBlock("round"); // player closes the result / starts a new round
+    expect(surpriseToShow(40, false, hasSurpriseBlock())).toBe("offer");
+  });
+  it("0..8 coins show the 'need 9 coins' notice, 51 does not, a used chance never does", () => {
+    expect(surpriseToShow(8, false, false)).toBe("low");
+    expect(surpriseToShow(0, false, false)).toBe("low");
+    expect(surpriseToShow(50, false, false)).toBe("offer");
+    expect(surpriseToShow(51, false, false)).toBeNull();
+    expect(surpriseToShow(30, true, false)).toBeNull();
+  });
+  it("the unconfirmed rules pop-up blocks it, even with a qualifying balance", () => {
+    _resetSurpriseBlocks();
+    addSurpriseBlock("rules");
+    expect(surpriseToShow(25, false, hasSurpriseBlock())).toBeNull();
+    removeSurpriseBlock("rules"); // rules confirmed / closed
+    expect(surpriseToShow(25, false, hasSurpriseBlock())).toBe("offer");
+  });
+  it("counts several blockers and notifies listeners only on real changes", () => {
+    _resetSurpriseBlocks();
+    let n = 0;
+    const off = subscribeSurpriseBlock(() => n++);
+    addSurpriseBlock("a");
+    addSurpriseBlock("a"); // duplicate: no change
+    addSurpriseBlock("b");
+    removeSurpriseBlock("a");
+    expect(hasSurpriseBlock()).toBe(true); // "b" still blocks
+    removeSurpriseBlock("b");
+    removeSurpriseBlock("b"); // already gone: no change
+    expect(hasSurpriseBlock()).toBe(false);
+    expect(n).toBe(4);
+    off();
+  });
+});

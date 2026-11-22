@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { LuckyCardRules } from "@/components/rules/LuckyCardRules";
+import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { RulesGate } from "@/components/rules/RulesGate";
 import { LuckyCardGame } from "@/components/lucky-card/LuckyCardGame";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
@@ -25,6 +26,9 @@ export default function LuckyCardPage() {
       </header>
       <Suspense fallback={null}>
         <RulesForUser />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CatSurpriseHost />
       </Suspense>
       <Suspense fallback={<div className="h-80 animate-pulse rounded-3xl bg-gold/5" />}>
         <Gate />

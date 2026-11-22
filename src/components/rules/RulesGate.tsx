@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
+import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
 import { confirmRules, hasConfirmedRules, rulesConsentKey, subscribeRulesConsent, type RulesGame } from "@/lib/rules-consent";
 
 /**
@@ -21,6 +22,7 @@ export function RulesGate({ game, userId, title, startLabel, children }: { game:
   );
   const [reviewOpen, setReviewOpen] = useState(false);
   const open = !confirmed || reviewOpen;
+  useSurpriseBlock(open); // the cat-game surprise waits until the rules pop-up is closed
   const setOpen = (v: boolean) => setReviewOpen(v);
   const [readAll, setReadAll] = useState(false);
   const [checked, setChecked] = useState(false);
