@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
+import { alertAdminError, shouldAlertRpcError } from "@/lib/admin-alert";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { bangkokDate, CAT_COUNT, CAT_GAME_COST, nextPlayAt } from "@/lib/cat-game/config";
 import { drawCatReward } from "@/lib/cat-game/draw";
@@ -16,17 +17,20 @@ export type CatGamePlayResponse = { reward: number; balance: number; cost: numbe
  * and logs everything in ONE transaction, so a double click / second tab can never play twice and a failure never moves coins.
  */
 export async function POST(request: Request) {
+  const ctx: { userId?: string } = {};
   try {
-    return await play(request);
+    return await play(request, ctx);
   } catch (e) {
     console.error("cat-game play: unhandled exception", e);
+    await alertAdminError({ where: "POST /api/cat-game/play (exception: หักเหรียญ/สุ่มรางวัล/บวกรางวัล)", userId: ctx.userId, error: e });
     return apiError(500, "INTERNAL", "ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง (ยังไม่มีการหักเหรียญ)");
   }
 }
 
-async function play(request: Request) {
+async function play(request: Request, ctx: { userId?: string }) {
   const { user, response: unauthorized } = await requireUser();
   if (!user) return unauthorized;
+  ctx.userId = user.id;
   const limited = rateLimitResponse(user.id, "catGamePlay");
   if (limited) return limited;
 
@@ -40,7 +44,11 @@ async function play(request: Request) {
     p_cat_index: body.catIndex,
     p_reward: reward,
   });
-  if (error) return rpcErrorResponse(error);
+  if (error) {
+    // only real failures reach the admin's LINE (not "not enough coins" / "already played today")
+    if (shouldAlertRpcError(error)) await alertAdminError({ where: "play_cat_game (หักเหรียญ 9 / สุ่มรางวัล / บวกเหรียญเข้า wallets)", userId: user.id, error });
+    return rpcErrorResponse(error);
+  }
 
   const r = data as { balance: number; reward_coins: number; play_date?: string };
   const now = new Date();

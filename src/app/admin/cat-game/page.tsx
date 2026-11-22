@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { CatGameAdmin } from "./cat-game-admin";
 import { formatThaiDateTime } from "@/components/topup/topup-labels";
+import { alertAdminError } from "@/lib/admin-alert";
 import { isAdminUser } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/server";
@@ -39,6 +40,11 @@ async function Data() {
     .select("id, user_id, play_date, removed_reward, reset_by, reason, created_at")
     .order("created_at", { ascending: false })
     .limit(20);
+
+  // a missing table (0017 not run yet) is a setup state the page already explains; anything else is a real failure
+  if (error && error.code !== "42P01" && error.code !== "PGRST205") {
+    await alertAdminError({ where: "หน้า /admin/cat-game: อ่าน cat_game_admin_resets", error, extra: `แอดมิน (admin id): ${user.id}` });
+  }
 
   return (
     <>
