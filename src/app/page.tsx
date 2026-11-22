@@ -11,7 +11,7 @@ import { FORTUNE_PRICES, formatCoins } from "@/lib/pricing";
 // Static page; the header's user area and the cat-game surprise pop-up stream in separately (they read the session).
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col pb-12 sm:max-w-2xl">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col pb-[max(8rem,calc(env(safe-area-inset-bottom)+7rem))] sm:max-w-2xl">
       <Hero />
       <Suspense fallback={null}>
         <CatSurpriseHost />
