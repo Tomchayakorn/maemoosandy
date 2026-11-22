@@ -14,9 +14,10 @@ describe("lucky card config", () => {
 });
 
 describe("expected return", () => {
-  it("default odds return ~35% (7 of 20) with bonus counted twice and the guarantee on", () => {
+  it("default odds return 45-48% (9-9.6 of 20) with bonus counted twice and the two-step guarantee on", () => {
     // If you change the odds on purpose, update this expectation together with the doc comment in lucky-card-config.ts.
-    expect(Math.abs(expectedReturnPer20() - 7)).toBeLessThan(0.01); // analytic, includes the bonus guarantee
+    expect(expectedReturnPer20()).toBeGreaterThan(9);
+    expect(expectedReturnPer20()).toBeLessThan(9.6);
   });
 });
 
@@ -52,29 +53,47 @@ describe("drawOutcome", () => {
   });
 });
 
-// ---- bonus guarantee ("pity") ----
-import { PITY_AFTER_DRY_ROUNDS, PITY_BONUS_COINS, SECRET_PRIZE_THB } from "../lucky-card-config";
-import { resolvePity } from "./draw";
+// ---- two-step guarantee ----
+import {
+  GUARANTEE_DRY_COINS,
+  GUARANTEE_DRY_ROUNDS,
+  GUARANTEE_EVERY_COINS,
+  GUARANTEE_EVERY_ROUNDS,
+  SECRET_PRIZE_THB,
+} from "../lucky-card-config";
+import { resolveGuarantee, type GuaranteeParams, type GuaranteeState } from "./draw";
 
-describe("resolvePity (reference model of play_lucky_card in 0008)", () => {
-  const msg = { kind: "message", messageId: "funny-01" } as const;
-  it("counts dry rounds, then turns the next message into a guaranteed bonus", () => {
-    expect(resolvePity(msg, 0, 50)).toMatchObject({ guaranteed: false, dryRounds: 1 });
-    expect(resolvePity(msg, 48, 50)).toMatchObject({ guaranteed: false, dryRounds: 49 });
-    expect(resolvePity(msg, 49, 50)).toMatchObject({ guaranteed: false, dryRounds: 50 });
-    expect(resolvePity(msg, 50, 50)).toEqual({ outcome: { kind: "bonus", coins: PITY_BONUS_COINS }, guaranteed: true, dryRounds: 0 });
+const G: GuaranteeParams = { dryAfter: 10, dryCoins: 15, everyRounds: 25, everyCoins: 40 };
+const msg = { kind: "message", messageId: "funny-01" } as const;
+
+describe("resolveGuarantee (reference model of play_lucky_card in 0015)", () => {
+  it("step 1: the 10th dry round in a row becomes a 15-coin bonus and resets the dry streak", () => {
+    expect(resolveGuarantee(msg, { dryRounds: 8, cycleRounds: 3 }, G)).toMatchObject({ guaranteed: false, state: { dryRounds: 9, cycleRounds: 4 } });
+    expect(resolveGuarantee(msg, { dryRounds: 9, cycleRounds: 3 }, G)).toEqual({
+      outcome: { kind: "bonus", coins: 15 }, guaranteed: "dry", state: { dryRounds: 0, cycleRounds: 4 },
+    });
   });
-  it("a natural bonus or secret resets the streak and is left untouched", () => {
-    expect(resolvePity({ kind: "bonus", coins: 300 }, 49, 50)).toEqual({ outcome: { kind: "bonus", coins: 300 }, guaranteed: false, dryRounds: 0 });
-    expect(resolvePity({ kind: "secret" }, 120, 50)).toEqual({ outcome: { kind: "secret" }, guaranteed: false, dryRounds: 0 });
+  it("step 2: the 25th round overall becomes a 40-coin bonus and wins over step 1", () => {
+    expect(resolveGuarantee(msg, { dryRounds: 9, cycleRounds: 24 }, G)).toEqual({
+      outcome: { kind: "bonus", coins: 40 }, guaranteed: "every", state: { dryRounds: 0, cycleRounds: 0 },
+    });
+    expect(resolveGuarantee(msg, { dryRounds: 2, cycleRounds: 24 }, G).guaranteed).toBe("every");
   });
-  it("is off when pityAfter is 0", () => {
-    expect(resolvePity(msg, 999, 0)).toMatchObject({ guaranteed: false, dryRounds: 1000 });
+  it("a natural bonus/secret is never replaced; it resets the dry streak but not the 25-round count", () => {
+    expect(resolveGuarantee({ kind: "bonus", coins: 100 }, { dryRounds: 9, cycleRounds: 24 }, G)).toEqual({
+      outcome: { kind: "bonus", coins: 100 }, guaranteed: false, state: { dryRounds: 0, cycleRounds: 0 },
+    });
+    expect(resolveGuarantee({ kind: "secret" }, { dryRounds: 5, cycleRounds: 10 }, G)).toEqual({
+      outcome: { kind: "secret" }, guaranteed: false, state: { dryRounds: 0, cycleRounds: 11 },
+    });
+  });
+  it("matches the configured numbers", () => {
+    expect(G).toEqual({ dryAfter: GUARANTEE_DRY_ROUNDS, dryCoins: GUARANTEE_DRY_COINS, everyRounds: GUARANTEE_EVERY_ROUNDS, everyCoins: GUARANTEE_EVERY_COINS });
   });
 });
 
-describe("long-run payout with the guarantee", () => {
-  it("never goes more than PITY_AFTER_DRY_ROUNDS rounds without a bonus/secret, and returns ~35% (7.0 of 20)", () => {
+describe("1,000,000-round simulation", () => {
+  it("never exceeds 10 rounds without a bonus, pays a 40 every 25th round, and returns 45-48% (analytic == simulated)", () => {
     // seeded PRNG (mulberry32) so the test is deterministic
     let t = 0x9e3779b9;
     const prng = () => {
@@ -84,19 +103,25 @@ describe("long-run payout with the guarantee", () => {
       return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
     };
     const rand = (n: number) => Math.floor(prng() * n);
-    const N = 1_500_000;
-    let dry = 0, maxDry = 0, units = 0, guaranteed = 0;
+    const N = 1_000_000;
+    let st: GuaranteeState = { dryRounds: 0, cycleRounds: 0 };
+    let maxDry = 0, units = 0, dryHits = 0, everyHits = 0;
     for (let i = 0; i < N; i++) {
-      const r = resolvePity(drawOutcome(rand), dry, PITY_AFTER_DRY_ROUNDS);
-      dry = r.dryRounds;
-      if (r.guaranteed) guaranteed++;
-      maxDry = Math.max(maxDry, dry);
+      const r = resolveGuarantee(drawOutcome(rand), st, G);
+      st = r.state;
+      if (r.guaranteed === "dry") dryHits++;
+      if (r.guaranteed === "every") everyHits++;
+      maxDry = Math.max(maxDry, st.dryRounds);
       if (r.outcome.kind === "bonus") units += 2 * r.outcome.coins;
       else if (r.outcome.kind === "secret") units += SECRET_PRIZE_THB;
     }
-    expect(maxDry).toBeLessThanOrEqual(PITY_AFTER_DRY_ROUNDS);
-    expect(guaranteed).toBeGreaterThan(0);
-    expect(units / N).toBeGreaterThan(6.8);
-    expect(units / N).toBeLessThan(7.2);
+    const evSim = units / N;
+    console.log("lucky-card sim", { returnPct: ((evSim / 20) * 100).toFixed(2), analytic: ((expectedReturnPer20() / 20) * 100).toFixed(2), dryHits, everyHits, maxDry });
+    expect(maxDry).toBeLessThan(GUARANTEE_DRY_ROUNDS);
+    expect(everyHits).toBeLessThanOrEqual(N / GUARANTEE_EVERY_ROUNDS); // a natural win on the 25th round keeps its own prize
+    expect(everyHits).toBeGreaterThan((N / GUARANTEE_EVERY_ROUNDS) * 0.97);
+    expect(evSim / 20).toBeGreaterThan(0.45);
+    expect(evSim / 20).toBeLessThan(0.48);
+    expect(Math.abs(evSim - expectedReturnPer20())).toBeLessThan(0.25);
   });
 });

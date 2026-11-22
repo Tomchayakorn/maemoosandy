@@ -299,6 +299,12 @@ wait for the owner's confirmation before starting the next.
   Cost of a streak ≈ +100 coins; ~2% of spins are hot (one streak per ~257 spins), paid for by lowering the ordinary 20/40-coin weights. `src/lib/wheel/sim.test.ts` simulates the whole machine (jackpot + buff + hot + 25% tally) over 2M spins: return 35.06%, ownerKeeps 64.9%.
   NOT in the code (and not added): a "no 3 retries in a row" cap and 2–3-spin mini streaks — they never existed in the wheel.
 
+- **Lucky card two-step guarantee + 46% return (code done 2026-11-22, awaiting owner review):** replaces the 50-round pity (0008). Step 1: every 10th round in a row without a bonus/secret = guaranteed 15-coin bonus
+  (`wallets.lucky_card_dry_rounds`). Step 2: every 25th round overall (continuous `wallets.lucky_card_cycle_rounds`, natural wins don't reset it) = guaranteed 40-coin bonus; step 2 wins if both are due; only plain messages are upgraded.
+  Applied in SQL under the wallet lock — **MIGRATION `0015_lucky_card_two_step_guarantee.sql` (run after 0014)** — the route passes `p_g1_*`/`p_g2_*` from `GUARANTEE_*` in `lucky-card-config.ts`; without 0015 the game works but has no guarantee/countdown.
+  Natural odds per 10,000: 100-coin 16 · 300-coin 52 · 500-coin 1 · secret 2. Return (bonus counted twice, secret at 1,000) = **46.1%** (owner keeps ~54%); `expectedReturnPer20()` is an exact Markov-chain value and `draw.test.ts` simulates 1,000,000 rounds (46.2%, max dry streak 9).
+  UI: countdown box "อีก N รอบ การันตีโบนัส …" (display only, counters come from the server response / wallet row). The "reveal the other cards faintly" idea was NOT built: outcomes are a single server roll, so any content shown on the other cards would be invented.
+
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its
    comment) and set:

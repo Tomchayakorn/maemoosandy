@@ -22,20 +22,16 @@ export type LuckyCardOutcomeKind = "bonus100" | "bonus300" | "bonus500" | "secre
 /**
  * Chance per round as weights out of ODDS_TOTAL (10,000 = 100%).
  * `message` is whatever is left over, so it is computed — never edit it by hand.
- * Defaults (formula 65/35: owner keeps ~65%, players get back ~35% = 7.0 of every 20 coins), WITH the bonus guarantee below:
- *   natural 100-coin 0.08% · 300-coin 0.55% (1 in ~182) · 500-coin 0.01% · secret prize 0.02% (1 in 5,000) · message 99.34%
- *   + guarantee: after PITY_AFTER_DRY_ROUNDS (50) rounds in a row with no bonus/secret, the next round is a 100-coin bonus.
- * Bonus coins pay out TWICE (coins into the wallet AND towards the 1,000-coin cash-out). Long-run average per round
- * (renewal-reward over one "dry streak" cycle, see expectedReturnPer20) = 7.005 per 20 coins played ≈ 35% returned.
- * The guarantee alone (a forced 100-coin bonus about every 44 rounds) already pays ~4.5 units/round, and the 300-coin tier
- * at 0.55% pays another ~3.3, so the natural 100-coin, 500-coin and secret chances had to be cut to stay at 35%.
+ * Target (set 2026-11-22): players get back ~46% (owner keeps ~54%) = ~9.2 of every 20 coins, bonus coins counted twice
+ * (coins into the wallet AND towards the 1,000-coin cash-out), secret prize at its cash value. Pinned by a unit test.
+ * Natural chances: 100-coin / 300-coin / 500-coin bonus and the secret prize (see ODDS). On top of them the TWO-STEP guarantee below.
  * Assumes every accumulated 1,000 is eventually cashed out; the real figure is a bit lower because partial progress is
- * never withdrawn. Check any edit with expectedReturnPer20() (a unit test pins it to 7.0 ± 0.01).
+ * never withdrawn. Check any edit with expectedReturnPer20() (analytic Markov chain) — the test also runs a 1,000,000-round simulation.
  */
 export const ODDS_TOTAL = 10_000;
 export const ODDS = {
-  bonus100: 8,
-  bonus300: 55,
+  bonus100: 16,
+  bonus300: 52,
   bonus500: 1,
   secret: 2,
 } as const;
@@ -52,42 +48,66 @@ export const ODDS_TABLE: readonly (readonly [LuckyCardOutcomeKind, number])[] = 
 ];
 
 /**
- * Bonus guarantee ("pity"): after this many consecutive rounds WITHOUT any bonus or secret prize, the next round is a
- * guaranteed bonus of PITY_BONUS_COINS. 0 disables it. The SQL function play_lucky_card (migration 0008) applies it under
- * the wallet lock; PITY_BONUS_COINS must be 100, 300 or 500.
+ * Two-step guarantee ("stairs"). Both apply only to a round that would otherwise be a plain message:
+ *   step 1: every GUARANTEE_DRY_ROUNDS-th round in a row WITHOUT any bonus/secret is a bonus of GUARANTEE_DRY_COINS (the dry
+ *           streak resets on any bonus/secret, natural or guaranteed);
+ *   step 2: every GUARANTEE_EVERY_ROUNDS-th round overall (a continuous count that natural wins do NOT reset) is a bonus of
+ *           GUARANTEE_EVERY_COINS. When both are due the bigger one (step 2) is paid and the dry streak resets.
+ * Applied by the SQL function play_lucky_card (migration 0015) under the wallet lock; the route passes these numbers.
+ * Counters: wallets.lucky_card_dry_rounds (step 1) and wallets.lucky_card_cycle_rounds (step 2).
  */
-export const PITY_AFTER_DRY_ROUNDS = 50;
-export const PITY_BONUS_COINS = 100;
+export const GUARANTEE_DRY_ROUNDS = 10;
+export const GUARANTEE_DRY_COINS = 15;
+export const GUARANTEE_EVERY_ROUNDS = 25;
+export const GUARANTEE_EVERY_COINS = 40;
 
-/** Coins credited for each bonus tier (must stay within the SQL whitelist 100/300/500). */
+/** Coins credited for each natural bonus tier (must stay within the SQL whitelist 100/300/500). */
 export const BONUS_COINS = { bonus100: 100, bonus300: 300, bonus500: 500 } as const;
 
 /**
- * Expected payout per round in coin/THB units (1 coin = 1 THB). Bonus coins count twice: once as coins credited to the
- * wallet and once as progress towards the 1,000-THB cash-out. With the guarantee, a "cycle" is the run of rounds from one
- * bonus/secret to the next: up to PITY_AFTER_DRY_ROUNDS natural draws, then (if all were messages) one guaranteed bonus.
- * Renewal-reward: EV = E[payout per cycle] / E[rounds per cycle]. Defaults → 7.005 (35% of 20).
+ * Expected payout per round in coin/THB units (1 coin = 1 THB), bonus coins counted twice, secret once.
+ * Exact value from the stationary distribution of the (dry streak, 25-round cycle) Markov chain.
  */
 export function expectedReturnPer20(): number {
-  const hitWeight = ODDS.bonus100 + ODDS.bonus300 + ODDS.bonus500 + ODDS.secret;
-  if (hitWeight === 0) return 0;
-  const p = hitWeight / ODDS_TOTAL;
-  const q = 1 - p;
-  // average payout of one natural hit
+  const G1 = GUARANTEE_DRY_ROUNDS, G2 = GUARANTEE_EVERY_ROUNDS;
+  const pm = ODDS_MESSAGE / ODDS_TOTAL;
+  const hitP = 1 - pm;
   const hitValue =
-    (ODDS.bonus100 * 2 * BONUS_COINS.bonus100 +
-      ODDS.bonus300 * 2 * BONUS_COINS.bonus300 +
-      ODDS.bonus500 * 2 * BONUS_COINS.bonus500 +
-      ODDS.secret * SECRET_PRIZE_THB) /
-    hitWeight;
-  const K = PITY_AFTER_DRY_ROUNDS;
-  if (K <= 0) return p * hitValue;
-  let rounds = 0;
-  for (let g = 1; g <= K; g++) rounds += g * Math.pow(q, g - 1) * p; // first natural hit on round g
-  const dry = Math.pow(q, K); // K dry rounds in a row -> guaranteed bonus on round K+1
-  rounds += (K + 1) * dry;
-  const payout = (1 - dry) * hitValue + dry * 2 * PITY_BONUS_COINS;
-  return payout / rounds;
+    (ODDS.bonus100 * 2 * BONUS_COINS.bonus100 + ODDS.bonus300 * 2 * BONUS_COINS.bonus300 +
+      ODDS.bonus500 * 2 * BONUS_COINS.bonus500 + ODDS.secret * SECRET_PRIZE_THB) / ODDS_TOTAL; // expected natural payout (already x probability)
+  const D = G1 > 0 ? G1 : 1, C = G2 > 0 ? G2 : 1;
+  const idx = (d: number, c: number) => d * C + c;
+  const n = D * C;
+  type Edge = { to: number; p: number };
+  const edges: Edge[][] = [];
+  const reward: number[] = new Array(n).fill(0);
+  for (let d = 0; d < D; d++) {
+    for (let c = 0; c < C; c++) {
+      const from = idx(d, c);
+      const nc = G2 > 0 ? (c + 1 >= G2 ? 0 : c + 1) : 0;
+      const e: Edge[] = [];
+      // natural bonus/secret: dry streak resets, cycle continues
+      if (hitP > 0) e.push({ to: idx(0, nc), p: hitP });
+      let msgPayout = 0;
+      const nd = d + 1 >= D ? D : d + 1;
+      let tod = nd;
+      if (G2 > 0 && c + 1 >= G2) { msgPayout = 2 * GUARANTEE_EVERY_COINS; tod = 0; }
+      else if (G1 > 0 && d + 1 >= G1) { msgPayout = 2 * GUARANTEE_DRY_COINS; tod = 0; }
+      else if (G1 <= 0) tod = 0;
+      e.push({ to: idx(Math.min(tod, D - 1), nc), p: pm });
+      edges[from] = e;
+      reward[from] = hitValue + pm * msgPayout;
+    }
+  }
+  let pi = new Array(n).fill(1 / n);
+  for (let it = 0; it < 4000; it++) {
+    const next = pi.slice().map((x) => x * 0.5);
+    for (let s = 0; s < n; s++) for (const { to, p } of edges[s]) next[to] += 0.5 * pi[s] * p;
+    pi = next;
+  }
+  let ev = 0;
+  for (let s = 0; s < n; s++) ev += pi[s] * reward[s];
+  return ev;
 }
 
 /** Throws if the numbers above are inconsistent (used by tests). */
@@ -95,6 +115,7 @@ export function validateLuckyCardConfig(): void {
   if (ODDS_MESSAGE < 0) throw new Error("lucky-card odds exceed 100%");
   if (ODDS_TABLE.reduce((s, [, w]) => s + w, 0) !== ODDS_TOTAL) throw new Error("lucky-card odds must sum to ODDS_TOTAL");
   if (!Number.isInteger(SECRET_PRIZE_THB) || SECRET_PRIZE_THB <= 0) throw new Error("SECRET_PRIZE_THB must be a positive integer");
-  if (!Number.isInteger(PITY_AFTER_DRY_ROUNDS) || PITY_AFTER_DRY_ROUNDS < 0 || PITY_AFTER_DRY_ROUNDS > 1000) throw new Error("PITY_AFTER_DRY_ROUNDS must be 0..1000");
-  if (![100, 300, 500].includes(PITY_BONUS_COINS)) throw new Error("PITY_BONUS_COINS must be 100, 300 or 500");
+  if (!Number.isInteger(GUARANTEE_DRY_ROUNDS) || GUARANTEE_DRY_ROUNDS < 1 || GUARANTEE_DRY_ROUNDS > 1000) throw new Error("GUARANTEE_DRY_ROUNDS must be 1..1000");
+  if (!Number.isInteger(GUARANTEE_EVERY_ROUNDS) || GUARANTEE_EVERY_ROUNDS < 1 || GUARANTEE_EVERY_ROUNDS > 1000) throw new Error("GUARANTEE_EVERY_ROUNDS must be 1..1000");
+  for (const c of [GUARANTEE_DRY_COINS, GUARANTEE_EVERY_COINS]) if (!Number.isInteger(c) || c < 1 || c > 500) throw new Error("guarantee coins must be 1..500");
 }

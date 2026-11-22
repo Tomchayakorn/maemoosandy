@@ -22,7 +22,11 @@ import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
  */
 export const LUCKY_CARD_COST = 20; // display + optimistic hold only; the server charges from its own constant
 export const LUCKY_CARD_COUNT = 8;
-const LUCKY_CARD_PITY_ROUNDS = 50; // display only; the server/database apply the real guarantee (lucky-card-config.ts PITY_AFTER_DRY_ROUNDS)
+// display only; the server/database apply the real guarantee (lucky-card-config.ts GUARANTEE_*, migration 0015)
+const GUARANTEE_DRY_ROUNDS = 10;
+const GUARANTEE_DRY_COINS = 15;
+const GUARANTEE_EVERY_ROUNDS = 25;
+const GUARANTEE_EVERY_COINS = 40;
 const CARD_BACK_SRC = "/images/card-back-mandala.jpg";
 
 type Phase =
@@ -34,12 +38,15 @@ export function LuckyCardGame({
   initialBalance,
   initialBonusTotal = 0,
   initialBonusPending = false,
+  initialGuarantee = null,
 }: {
   initialBalance: number;
   /** Accumulated bonus coins from this game (separate from the main wallet). */
   initialBonusTotal?: number;
   /** A bonus cash-out request is already waiting for the admin. */
   initialBonusPending?: boolean;
+  /** Counters for the guarantee countdown (null when migration 0015 isn't installed: the countdown is hidden). */
+  initialGuarantee?: { dryRounds: number; cycleRounds: number } | null;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -48,6 +55,7 @@ export function LuckyCardGame({
   const [error, setError] = useState<string | null>(null);
   const [bonusTotal, setBonusTotal] = useState(initialBonusTotal);
   const [bonusPending, setBonusPending] = useState(initialBonusPending);
+  const [guarantee, setGuarantee] = useState(initialGuarantee);
   const balanceRef = useRef(balance);
   const busy = useRef(false);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -60,8 +68,9 @@ export function LuckyCardGame({
     if (!busy.current) {
       setBonusTotal(initialBonusTotal);
       setBonusPending(initialBonusPending);
+      setGuarantee(initialGuarantee);
     }
-  }, [initialBonusTotal, initialBonusPending]);
+  }, [initialBonusTotal, initialBonusPending, initialGuarantee]);
   useEffect(() => {
     balanceRef.current = balance;
   }, [balance]);
@@ -101,6 +110,7 @@ export function LuckyCardGame({
         const won = json.outcome.kind === "bonus" ? json.outcome.coins : 0;
         if (won) setBonusTotal((t) => t + won);
       }
+      if (json.guarantee) setGuarantee(json.guarantee);
       walletBus.release(json.balance);
       setPhase({ name: "result", index, outcome: json.outcome });
       busy.current = false;
@@ -120,9 +130,8 @@ export function LuckyCardGame({
       <p className="text-sm text-cream-muted">
         เปิดไพ่ 1 ใบจาก {LUCKY_CARD_COUNT} ใบ · รอบละ <b className="text-gold-light">{LUCKY_CARD_COST}</b> เหรียญ · คงเหลือ{" "}
         <b className="text-gold-light">{formatCoins(balance)}</b> เหรียญ
-        <br />
-        <span className="text-xs text-cream-muted/80">ไม่ได้โบนัสติดต่อกัน {LUCKY_CARD_PITY_ROUNDS} รอบ รอบถัดไปการันตีโบนัส 100 เหรียญ</span>
       </p>
+      <GuaranteeCountdown guarantee={guarantee} />
 
       {phase.name !== "result" && (
         <div className="grid grid-cols-4 gap-2.5 [perspective:900px]">
@@ -194,8 +203,8 @@ export function LuckyCardGame({
 function celebrate(outcome: LuckyCardOutcome, card: HTMLElement | null) {
   if (outcome.kind === "message") return;
   if (outcome.kind === "bonus") {
-    if (outcome.coins === 100) goldSparkleAt(card);
-    else if (outcome.coins === 300) {
+    if (outcome.coins < 300) goldSparkleAt(card);
+    else if (outcome.coins < 500) {
       goldSparkleAt(card);
       setTimeout(goldCelebration, 150);
     } else {
@@ -226,7 +235,7 @@ function ResultView({
 
   const pop = reduce ? {} : { initial: { opacity: 0, scale: 0.8, y: 20 }, animate: { opacity: 1, scale: 1, y: 0 }, transition: { type: "spring" as const, stiffness: 260, damping: 18 } };
 
-  const bonusTier = outcome.kind === "bonus" ? (outcome.coins === 100 ? 1 : outcome.coins === 300 ? 2 : 3) : 0;
+  const bonusTier = outcome.kind === "bonus" ? (outcome.coins >= 500 ? 3 : outcome.coins >= 300 ? 2 : 1) : 0;
 
   return (
     <motion.div
@@ -261,7 +270,11 @@ function ResultView({
       {outcome.kind === "bonus" && (
         <>
           <p className="relative text-xs tracking-widest text-gold/80">
-            {outcome.guaranteed ? "โบนัสการันตี ✨" : `โบนัสพิเศษ ระดับ ${bonusTier}`}
+            {outcome.guaranteed === "every"
+              ? `โบนัสการันตีครบ ${GUARANTEE_EVERY_ROUNDS} รอบ ✨`
+              : outcome.guaranteed
+                ? `โบนัสการันตีไม่ได้โบนัสติดกัน ${GUARANTEE_DRY_ROUNDS} รอบ ✨`
+                : `โบนัสพิเศษ ระดับ ${bonusTier}`}
           </p>
           <motion.p
             className={"relative font-tarot font-bold text-gold-gradient " + (bonusTier === 3 ? "text-6xl" : bonusTier === 2 ? "text-5xl" : "text-4xl")}
@@ -337,6 +350,29 @@ function ResultView({
         </Link>
       )}
     </motion.div>
+  );
+}
+
+/** Countdown to the two guaranteed bonuses. Display only: the counters come from the server. */
+function GuaranteeCountdown({ guarantee }: { guarantee: { dryRounds: number; cycleRounds: number } | null }) {
+  if (!guarantee) return null;
+  const toDry = Math.max(GUARANTEE_DRY_ROUNDS - guarantee.dryRounds, 1);
+  const toEvery = Math.max(GUARANTEE_EVERY_ROUNDS - guarantee.cycleRounds, 1);
+  const line = (n: number, coins: number, what: string) =>
+    n === 1 ? (
+      <>
+        รอบนี้ <b className="text-gold-light">การันตีโบนัส {coins} เหรียญทันที!</b> {what}
+      </>
+    ) : (
+      <>
+        อีก <b className="text-gold-light">{n}</b> รอบ การันตีโบนัส <b className="text-gold-light">{coins}</b> เหรียญทันที! {what}
+      </>
+    );
+  return (
+    <div className="flex flex-col gap-1 rounded-2xl border border-gold/30 bg-velvet/70 p-3 text-xs text-cream" aria-live="polite">
+      <p>{line(toDry, GUARANTEE_DRY_COINS, `(ถ้ายังไม่ได้โบนัสต่อเนื่อง ${GUARANTEE_DRY_ROUNDS} รอบ)`)}</p>
+      <p>{line(toEvery, GUARANTEE_EVERY_COINS, `(ทุก ${GUARANTEE_EVERY_ROUNDS} รอบ นับต่อเนื่อง)`)}</p>
+    </div>
   );
 }
 

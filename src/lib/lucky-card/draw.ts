@@ -1,11 +1,11 @@
 import "server-only";
 import { randomInt } from "node:crypto";
 import { LUCKY_CARD_MESSAGES } from "../../data/lucky-card-messages";
-import { BONUS_COINS, ODDS_TABLE, ODDS_TOTAL, PITY_BONUS_COINS, type LuckyCardOutcomeKind } from "../lucky-card-config";
+import { BONUS_COINS, ODDS_TABLE, ODDS_TOTAL, type LuckyCardOutcomeKind } from "../lucky-card-config";
 
 export type DrawnOutcome =
   | { kind: "message"; messageId: string }
-  | { kind: "bonus"; coins: 100 | 300 | 500 }
+  | { kind: "bonus"; coins: number }
   | { kind: "secret" };
 
 /** Map a roll in [0, ODDS_TOTAL) to an outcome kind (pure, for tests). */
@@ -29,18 +29,30 @@ export function drawOutcome(rand: (maxExclusive: number) => number = (n) => rand
   return { kind: "bonus", coins: BONUS_COINS[kind] };
 }
 
+export type GuaranteeState = { dryRounds: number; cycleRounds: number };
+export type GuaranteeParams = { dryAfter: number; dryCoins: number; everyRounds: number; everyCoins: number };
+
 /**
- * Reference model of the guarantee that the SQL function `play_lucky_card` (migration 0008) applies under the wallet lock.
+ * Reference model of the two-step guarantee that the SQL function `play_lucky_card` (migration 0015) applies under the wallet lock.
  * The database is the source of truth; this keeps the rule unit-testable and lets tests simulate the long-run payout.
- * A message drawn after `pityAfter` dry rounds in a row becomes a guaranteed bonus; any bonus/secret resets the streak.
+ * Only a plain message is ever upgraded: step 2 (every `everyRounds`-th round, continuous count) beats step 1
+ * (`dryAfter` rounds in a row without any bonus/secret). A bonus/secret (natural or guaranteed) resets the dry streak;
+ * the continuous count only resets when it reaches `everyRounds`.
  */
-export function resolvePity(
+export function resolveGuarantee(
   drawn: DrawnOutcome,
-  dryRounds: number,
-  pityAfter: number,
-): { outcome: DrawnOutcome; guaranteed: boolean; dryRounds: number } {
-  if (pityAfter > 0 && drawn.kind === "message" && dryRounds >= pityAfter) {
-    return { outcome: { kind: "bonus", coins: PITY_BONUS_COINS as 100 | 300 | 500 }, guaranteed: true, dryRounds: 0 };
+  state: GuaranteeState,
+  g: GuaranteeParams,
+): { outcome: DrawnOutcome; guaranteed: false | "dry" | "every"; state: GuaranteeState } {
+  const cycle = state.cycleRounds + 1;
+  const everyDue = g.everyRounds > 0 && cycle >= g.everyRounds;
+  const nextCycle = everyDue ? 0 : cycle;
+  if (drawn.kind === "message") {
+    if (everyDue) return { outcome: { kind: "bonus", coins: g.everyCoins as 100 }, guaranteed: "every", state: { dryRounds: 0, cycleRounds: nextCycle } };
+    if (g.dryAfter > 0 && state.dryRounds + 1 >= g.dryAfter) {
+      return { outcome: { kind: "bonus", coins: g.dryCoins as 100 }, guaranteed: "dry", state: { dryRounds: 0, cycleRounds: nextCycle } };
+    }
+    return { outcome: drawn, guaranteed: false, state: { dryRounds: state.dryRounds + 1, cycleRounds: nextCycle } };
   }
-  return { outcome: drawn, guaranteed: false, dryRounds: drawn.kind === "message" ? dryRounds + 1 : 0 };
+  return { outcome: drawn, guaranteed: false, state: { dryRounds: 0, cycleRounds: nextCycle } };
 }

@@ -65,6 +65,7 @@ export type Database = {
           lucky_card_bonus_total: number;
           /** Consecutive rounds without a bonus/secret (migration 0008); drives the bonus guarantee. */
           lucky_card_dry_rounds: number;
+          lucky_card_cycle_rounds: number;
           /** "การ์ด +ความเฮง" held (migration 0010) */
           luck_cards: number;
           /** rounds left on the +ความเฮง buff */
@@ -84,6 +85,7 @@ export type Database = {
           jackpot_withdrawals_available?: number;
           lucky_card_bonus_total?: number;
           lucky_card_dry_rounds?: number;
+          lucky_card_cycle_rounds?: number;
           luck_cards?: number;
           luck_buff_rounds?: number;
           wheel_cash_total?: number;
@@ -363,10 +365,14 @@ export type Database = {
           p_message_id: string | null;
           p_bonus_coins: number;
           p_prize_thb: number;
-          p_pity_after?: number;
+          p_pity_after?: number; // 0008 signature (superseded by 0015)
           p_pity_bonus?: number;
+          p_g1_after?: number; // 0015: step 1 = every Nth round in a row without a bonus
+          p_g1_coins?: number;
+          p_g2_every?: number; // 0015: step 2 = every Nth round overall
+          p_g2_coins?: number;
         };
-        Returns: Json; // { play_id, balance, prize_id, bonus_total, kind, bonus_coins, message_id, guaranteed, dry_rounds }
+        Returns: Json; // { play_id, balance, prize_id, bonus_total, kind, bonus_coins, message_id, guaranteed, guarantee_tier, dry_rounds, cycle_rounds }
       };
       request_lucky_card_bonus_withdrawal: {
         Args: { p_user_id: string; p_bank_name: string; p_account_number: string; p_account_name: string };
