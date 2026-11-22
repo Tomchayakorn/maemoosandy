@@ -33,7 +33,9 @@ export type LedgerReason =
   | "luckycard_bonus"
   | "catgame"
   | "catgame_prize"
-  | "voucher";
+  | "voucher"
+  | "mystic_bet"
+  | "mystic_win";
 
 export type Database = {
   public: {
@@ -238,6 +240,24 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      mystic_chest_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          bet: number;
+          mines: number;
+          mine_mask: number;
+          opened_mask: number;
+          safe_count: number;
+          status: "active" | "cashed" | "lost" | "cleared";
+          payout: number;
+          created_at: Timestamp;
+          finished_at: Timestamp | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       voucher_codes: {
         Row: {
           id: string;
@@ -421,6 +441,18 @@ export type Database = {
         Args: { p_request_id: string; p_approve: boolean; p_reviewer: string };
         Returns: Json; // { status }
       };
+      mystic_start: {
+        Args: { p_user_id: string; p_bet: number; p_mines: number; p_mine_mask: number };
+        Returns: Json; // round view (mine_mask null while active)
+      };
+      mystic_open: {
+        Args: { p_user_id: string; p_round_id: string; p_tile: number };
+        Returns: Json;
+      };
+      mystic_cashout: {
+        Args: { p_user_id: string; p_round_id: string };
+        Returns: Json;
+      };
       redeem_voucher: {
         Args: { p_user_id: string; p_code: string };
         Returns: Json; // { coins, balance, redemption_id }
@@ -529,6 +561,14 @@ export const RPC_ERRORS = [
   "VOUCHER_EXPIRED",
   "VOUCHER_ALREADY_USED",
   "VOUCHER_FULL",
+  "INVALID_BET",
+  "INVALID_MINES",
+  "INVALID_TILE",
+  "ACTIVE_ROUND_EXISTS",
+  "ROUND_NOT_FOUND",
+  "ROUND_NOT_ACTIVE",
+  "TILE_ALREADY_OPENED",
+  "NO_SAFE_TILE",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

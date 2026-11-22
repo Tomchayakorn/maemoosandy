@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe("shouldAlertRpcError", () => {
   it("ignores expected user-level outcomes", () => {
-    for (const m of ["INSUFFICIENT_COINS", "ALREADY_PLAYED_TODAY", "NOTHING_TO_RESET"]) expect(shouldAlertRpcError({ message: m })).toBe(false);
+    for (const m of ["INSUFFICIENT_COINS", "ALREADY_PLAYED_TODAY", "NOTHING_TO_RESET", "ROUND_NOT_ACTIVE", "ROUND_NOT_FOUND", "TILE_ALREADY_OPENED", "ACTIVE_ROUND_EXISTS", "NO_SAFE_TILE"]) expect(shouldAlertRpcError({ message: m })).toBe(false);
     expect(shouldAlertRpcError(null)).toBe(false);
   });
   it("alerts on real server failures", () => {

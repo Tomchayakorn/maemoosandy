@@ -85,6 +85,18 @@ export default function Home() {
           }
           icon={<span className="text-4xl leading-none">🐱</span>}
         />
+        <ServiceCard
+          index={5}
+          href="/mystic-chests"
+          title="เปิดหีบมนตรา วัดใจสะสมตัวคูณ"
+          description="เปิดหีบทีละใบ หลบจุดอาถรรพ์ 1–3 จุด ตัวคูณยิ่งเปิดยิ่งสูง กดรับเหรียญเมื่อไรก็ได้ รับสูงสุด 5,000 เหรียญต่อรอบ"
+          price={
+            <span className="inline-flex items-center gap-1">
+              <CoinIcon className="size-4" /> เดิมพัน 10 – 100 เหรียญ
+            </span>
+          }
+          icon={<span className="text-4xl leading-none">🎁</span>}
+        />
       </section>
 
       <section className="mt-8 px-4">

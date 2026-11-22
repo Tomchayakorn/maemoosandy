@@ -3,7 +3,7 @@
  * Key = game + user id + RULES_VERSION, so a different account on the same browser is asked again, and bumping
  * RULES_VERSION re-asks everyone after the rules change. Clearing the browser's site data clears it too.
  */
-export type RulesGame = "wheel" | "lucky-card" | "cat-game";
+export type RulesGame = "wheel" | "lucky-card" | "cat-game" | "mystic-chests";
 
 export const RULES_VERSION = 1;
 
