@@ -385,6 +385,22 @@ export type Database = {
         Args: { p_request_id: string; p_approve: boolean; p_reviewer: string };
         Returns: Json; // { status }
       };
+      claim_daily_summary: {
+        Args: { p_date: string };
+        Returns: boolean; // true = this caller must send the summary for that Bangkok date
+      };
+      finish_daily_summary: {
+        Args: {
+          p_date: string;
+          p_ok: boolean;
+          p_income_thb: number;
+          p_income_count: number;
+          p_expense_thb: number;
+          p_expense_count: number;
+          p_error?: string | null;
+        };
+        Returns: undefined;
+      };
       admin_reset_cat_game: {
         Args: { p_user_id: string; p_admin: string; p_reason?: string | null };
         Returns: Json; // { play_date, removed_reward, balance }
