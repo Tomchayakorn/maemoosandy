@@ -7,7 +7,7 @@ import { CatSurpriseLive } from "./CatSurpriseLive";
 /**
  * Server side of the cat-game surprise (put it in its own <Suspense fallback={null}> on a page): reads the wallet and whether
  * today's play (Bangkok date) is unused, then hands over to the live client component that follows the balance.
- * Renders nothing when signed out, when today's chance is used, or when migration 0016 isn't installed (the game isn't available).
+ * Renders nothing when signed out or when migration 0016 isn't installed (the game isn't available).
  */
 export async function CatSurpriseHost() {
   await connection();
@@ -18,6 +18,7 @@ export async function CatSurpriseHost() {
     getMyWallet(),
     (await createClient()).from("cat_game_plays").select("id").eq("play_date", day).maybeSingle(),
   ]);
-  if (!wallet || played.error || played.data) return null;
-  return <CatSurpriseLive userId={user.id} bangkokDay={day} initialBalance={wallet.balance} />;
+  if (!wallet || played.error) return null;
+  // keep rendering after today's play so a result shown in the pop-up is not lost when the page refreshes
+  return <CatSurpriseLive userId={user.id} bangkokDay={day} initialBalance={wallet.balance} playedToday={!!played.data} />;
 }

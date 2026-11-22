@@ -56,3 +56,12 @@ export function buildBoard(images: Record<CatColor, readonly string[]> = CAT_IMA
     return { index, color, src: list[nth % list.length], label: `น้องเหมียว${COLOR_LABEL[color]}ตัวที่ ${nth + 1}` };
   });
 }
+
+/** A short blessing shown with the reward (bigger prize, bigger blessing). */
+export function catBlessing(reward: number): string {
+  if (reward >= 1000) return "ว้าว! น้องเหมียวประทานโชคใหญ่ ขอให้ปีนี้ปังทุกเรื่อง เงินทองไหลมาเทมา 🐱✨";
+  if (reward >= 500) return "โชคดีมากค่ะ ขอให้เหรียญนี้นำพาความเฮงไปตลอดทั้งสัปดาห์ 🍀";
+  if (reward >= 400) return "น้องเหมียวส่งโชคมาให้เต็มๆ ขอให้งานการราบรื่นนะคะ ✨";
+  if (reward >= 300) return "เหมียวนำโชคมาแล้ว ขอให้มีแต่เรื่องดีๆ เข้ามาไม่ขาดสาย 🐾";
+  return "โชคดีเริ่มต้นแล้วค่ะ ขอให้เหรียญนี้งอกเงยต่อไป กลับมาเจอกันใหม่พรุ่งนี้นะคะ 🐱";
+}

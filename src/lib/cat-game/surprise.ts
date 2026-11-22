@@ -24,6 +24,15 @@ export function surpriseToShow(balance: number, playedToday: boolean, blocked: b
 }
 
 /**
+ * Whether the pop-up is on screen. A round in progress or its result always stays visible (even though the daily chance is now used,
+ * the player must see the reward). Otherwise it needs an eligible state, nothing else on screen, the grace delay done, and no dismissal.
+ */
+export function popupVisible(o: { playing: boolean; hasResult: boolean; state: SurpriseState | null; blocked: boolean; graceReady: boolean; dismissed: boolean }): boolean {
+  if (o.playing || o.hasResult) return true;
+  return o.state !== null && !o.blocked && o.graceReady && !o.dismissed;
+}
+
+/**
  * Dismissal is remembered per user + state + Bangkok day + BALANCE, for this browser session only. So closing it does not bring it back
  * at the same balance (reload, another page), but once the balance changes (e.g. a round leaves 40 coins) a fresh chance to show it exists.
  * (Without the balance in the key, closing it once on the home page hid it for the whole day in that state.)

@@ -216,3 +216,47 @@ describe("regression: closed once earlier in the day, still shows when a round l
     expect(surpriseToShow(40, false, false)).toBe("offer");
   });
 });
+
+import { catBlessing } from "./config";
+import { playCatGame } from "./client";
+import { popupVisible } from "./surprise";
+
+describe("playing inside the pop-up", () => {
+  const json = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+  it("success returns the reward and the new balance from the server", async () => {
+    const out = await playCatGame(4, json(200, { reward: 500, balance: 541, cost: 9, nextPlayAt: "2026-11-22T17:00:00.000Z" }));
+    expect(out).toEqual({ ok: true, reward: 500, balance: 541, nextPlayAt: "2026-11-22T17:00:00.000Z" });
+  });
+  it("sends only the cat index", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ reward: 200, balance: 1 }), { status: 200 }));
+    await playCatGame(7, f as unknown as typeof fetch);
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/cat-game/play");
+    expect(JSON.parse(init.body as string)).toEqual({ catIndex: 7 });
+  });
+  it("already played today / not enough coins / network error come back as typed failures", async () => {
+    expect(await playCatGame(0, json(409, { error: { code: "ALREADY_PLAYED_TODAY", message: "วันนี้เล่นแล้ว" } }))).toEqual({ ok: false, alreadyPlayed: true, message: "วันนี้เล่นแล้ว" });
+    expect(await playCatGame(0, json(402, { error: { code: "INSUFFICIENT_COINS", message: "เหรียญไม่พอ" } }))).toMatchObject({ ok: false, alreadyPlayed: false, message: "เหรียญไม่พอ" });
+    expect(await playCatGame(0, (async () => { throw new Error("offline"); }) as unknown as typeof fetch)).toMatchObject({ ok: false, alreadyPlayed: false });
+    expect(await playCatGame(0, json(500, null))).toMatchObject({ ok: false });
+  });
+  it("blessing exists for each of the 5 rewards", () => {
+    const texts = CAT_REWARDS.map((r) => catBlessing(r));
+    expect(new Set(texts).size).toBe(5);
+    texts.forEach((t) => expect(t.length).toBeGreaterThan(10));
+  });
+  it("a round in progress and its result stay on screen even though the daily chance is now used", () => {
+    const base = { state: null, blocked: true, graceReady: false, dismissed: true };
+    expect(popupVisible({ ...base, playing: true, hasResult: false })).toBe(true);
+    expect(popupVisible({ ...base, playing: false, hasResult: true })).toBe(true);
+    expect(popupVisible({ ...base, playing: false, hasResult: false })).toBe(false);
+  });
+  it("otherwise: needs a state, nothing blocking, grace done and not dismissed", () => {
+    const ok = { playing: false, hasResult: false, state: "offer" as const, blocked: false, graceReady: true, dismissed: false };
+    expect(popupVisible(ok)).toBe(true);
+    expect(popupVisible({ ...ok, blocked: true })).toBe(false);
+    expect(popupVisible({ ...ok, graceReady: false })).toBe(false);
+    expect(popupVisible({ ...ok, dismissed: true })).toBe(false);
+    expect(popupVisible({ ...ok, state: null })).toBe(false);
+  });
+});
