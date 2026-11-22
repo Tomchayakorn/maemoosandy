@@ -2,11 +2,12 @@ import { CAT_GAME_COST } from "./config";
 
 /**
  * "Surprise" pop-up rules for น้องเหมียว 9 ชีวิต (display only; the server enforces the real rules in play_cat_game).
- *   - 9..20 coins and today's play not used  -> "offer"  (you can play right now)
- *   - fewer than 9 coins (up to 20) and today's play not used -> "low" (need at least 9 coins to start; top up)
- *   - otherwise (more than 20 coins, or already played today) -> no pop-up
+ * The upper bound is 50 = the price of one wheel spin (the wheel costs 50, a lucky-card round 20), i.e. "a player who is about to run out".
+ *   - 9..50 coins and today's play not used -> "offer"  (you can play right now)
+ *   - 0..8 coins and today's play not used  -> "low" (need at least 9 coins to start; top up)
+ *   - otherwise (more than 50 coins, or already played today) -> no pop-up
  */
-export const SURPRISE_MAX_BALANCE = 20;
+export const SURPRISE_MAX_BALANCE = 50;
 export type SurpriseState = "offer" | "low";
 
 export function catSurpriseState(balance: number, playedToday: boolean): SurpriseState | null {

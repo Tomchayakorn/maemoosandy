@@ -80,19 +80,22 @@ import {
   _resetSurpriseMemory, catSurpriseState, dismissSurprise, isSurpriseDismissed, SURPRISE_MAX_BALANCE, surpriseDismissKey,
 } from "./surprise";
 
-describe("surprise pop-up eligibility (9..20 coins, daily chance unused)", () => {
-  it("offers the game for 9..20 coins when today's play is unused", () => {
-    for (const b of [9, 10, 15, 20]) expect(catSurpriseState(b, false)).toBe("offer");
+describe("surprise pop-up eligibility (0..50 coins, daily chance unused)", () => {
+  it("offers the game for 9..50 coins when today's play is unused", () => {
+    for (const b of [9, 10, 15, 20, 21, 49, 50]) expect(catSurpriseState(b, false)).toBe("offer");
   });
-  it("shows the 'need at least 9 coins' state below 9", () => {
+  it("shows the 'need at least 9 coins' state for 0..8", () => {
     for (const b of [0, 1, 8]) expect(catSurpriseState(b, false)).toBe("low");
   });
-  it("no pop-up above 20 coins or after today's play", () => {
-    expect(SURPRISE_MAX_BALANCE).toBe(20);
-    for (const b of [21, 100, 5000]) expect(catSurpriseState(b, false)).toBeNull();
-    for (const b of [0, 8, 9, 20]) expect(catSurpriseState(b, true)).toBeNull();
+  it("no pop-up above 50 coins or after today's play", () => {
+    expect(SURPRISE_MAX_BALANCE).toBe(50);
+    for (const b of [51, 100, 5000]) expect(catSurpriseState(b, false)).toBeNull();
+    for (const b of [0, 8, 9, 20, 50, 51]) expect(catSurpriseState(b, true)).toBeNull();
     expect(catSurpriseState(Number.NaN, false)).toBeNull();
     expect(catSurpriseState(-1, false)).toBeNull();
+  });
+  it("boundaries 0, 8, 9, 20, 50, 51", () => {
+    expect([0, 8, 9, 20, 50, 51].map((b) => catSurpriseState(b, false))).toEqual(["low", "low", "offer", "offer", "offer", null]);
   });
   it("the 'offer' boundary is exactly the cost of a play", () => {
     expect(catSurpriseState(CAT_GAME_COST - 1, false)).toBe("low");

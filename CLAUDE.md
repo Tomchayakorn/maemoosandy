@@ -310,8 +310,8 @@ wait for the owner's confirmation before starting the next.
   pictures per colour in `CAT_IMAGES`); crypto draw: `src/lib/cat-game/draw.ts`. `POST /api/cat-game/play` ({catIndex} only) → RPC `play_cat_game` (**MIGRATION `0016_cat_game.sql`, run after 0015**): wallet FOR UPDATE, `cat_game_plays` UNIQUE(user_id, play_date)
   → ALREADY_PLAYED_TODAY, INSUFFICIENT_COINS, charge + prize + 2 ledger rows (`catgame`, `catgame_prize`) in one transaction; without 0016 the route answers 503 and the page shows "not ready". Page `/cat-game` (protected prefix), home card, rules pop-up
   (`RulesGate game="cat-game"`, `CatGameRules`). **Economics: average payout 480 coins for a 9-coin play (expected loss ≈ 471 coins per player per day) — see the owner note when it was built.**
-  **Surprise pop-up (2026-11-22):** on the home page only (`CatSurpriseGate` in `src/app/page.tsx`, reads wallet + today's play) a modal appears when the balance is 9–20 coins and today's play is unused ("offer"), or <9 coins ("low": needs ≥ 9 to start, top-up link). Rules in `src/lib/cat-game/surprise.ts`;
-  a dismissal is kept in sessionStorage per user + state + Bangkok day (no re-pop). The pop-up only advertises the game — the server does NOT limit play to 9–20 coins.
+  **Surprise pop-up (2026-11-22):** on the home page only (`CatSurpriseGate` in `src/app/page.tsx`, reads wallet + today's play) a modal appears when the balance is 9–50 coins and today's play is unused ("offer"; 50 = one wheel spin, updated 2026-11-22), or 0–8 coins ("low": needs ≥ 9 to start, top-up link). Rules in `src/lib/cat-game/surprise.ts`;
+  a dismissal is kept in sessionStorage per user + state + Bangkok day (no re-pop). The pop-up only advertises the game — the server does NOT limit play by balance.
 
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its
