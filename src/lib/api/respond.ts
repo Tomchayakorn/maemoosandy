@@ -39,6 +39,7 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   NO_LUCK_CARDS: { status: 400, message: "ยังไม่มีการ์ด +ความเฮง ให้ใช้ค่ะ" },
   BUFF_ALREADY_ACTIVE: { status: 409, message: "บัฟ +ความเฮง กำลังทำงานอยู่ ใช้การ์ดใบถัดไปได้เมื่อบัฟหมดค่ะ" },
   INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
+  NOTHING_TO_RESET: { status: 409, message: "ผู้เล่นคนนี้ยังไม่ได้เล่นวันนี้ จึงไม่มีสิทธิ์ที่ต้องรีเซ็ต" },
   ALREADY_PLAYED_TODAY: { status: 409, message: "วันนี้คุณเล่นน้องเหมียว 9 ชีวิตไปแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
 };
 

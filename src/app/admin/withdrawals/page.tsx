@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -15,7 +16,12 @@ export const metadata: Metadata = { title: "จัดการคำขอถอ
 export default function AdminWithdrawalsPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 pb-14 pt-8">
-      <h1 className="font-display text-3xl text-gold-gradient">คำขอถอนรางวัลแจ็กพอต</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="font-display text-3xl text-gold-gradient">คำขอถอนรางวัลแจ็กพอต</h1>
+        <Link href="/admin/cat-game" className="text-sm text-gold-light underline">
+          สิทธิ์เล่นน้องเหมียว 9 ชีวิต
+        </Link>
+      </div>
       <Suspense fallback={<div className="h-64 animate-pulse rounded-3xl bg-gold/5" />}>
         <Data />
       </Suspense>

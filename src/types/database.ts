@@ -233,6 +233,22 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      cat_game_admin_resets: {
+        Row: {
+          id: string;
+          user_id: string;
+          play_date: string;
+          removed_play_id: string | null;
+          removed_cat_index: number | null;
+          removed_reward: number | null;
+          reset_by: string;
+          reason: string | null;
+          created_at: Timestamp;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       cat_game_plays: {
         Row: {
           id: string;
@@ -369,6 +385,10 @@ export type Database = {
         Args: { p_request_id: string; p_approve: boolean; p_reviewer: string };
         Returns: Json; // { status }
       };
+      admin_reset_cat_game: {
+        Args: { p_user_id: string; p_admin: string; p_reason?: string | null };
+        Returns: Json; // { play_date, removed_reward, balance }
+      };
       play_cat_game: {
         Args: { p_user_id: string; p_cost: number; p_cat_index: number; p_reward: number };
         Returns: Json; // { play_id, balance, reward_coins, play_date }
@@ -447,6 +467,7 @@ export const RPC_ERRORS = [
   "WHEEL_CASH_WEEKLY_LIMIT",
   "INVALID_TIER",
   "ALREADY_PLAYED_TODAY",
+  "NOTHING_TO_RESET",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

@@ -129,3 +129,35 @@ describe("surprise dismissal", () => {
     expect(isSurpriseDismissed(k, broken)).toBe(true);
   });
 });
+
+import { applyAdminReset, matchUser } from "./admin";
+
+describe("admin reset of the daily chance (reference model of admin_reset_cat_game, 0017)", () => {
+  const played = { balance: 591, ledgerCoins: 491, todayPlay: { catIndex: 4, reward: 500 }, resets: [] };
+  it("removes today's play only: balance and ledger stay exactly as they were, and the reset is logged", () => {
+    const r = applyAdminReset(played, "admin@x.com");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.todayPlay).toBeNull();
+    expect(r.state.balance).toBe(591);
+    expect(r.state.ledgerCoins).toBe(491);
+    expect(r.state.resets).toEqual([{ removedReward: 500, by: "admin@x.com" }]);
+    expect(canPlayToday(r.state.todayPlay ? bangkokDate(new Date("2026-11-22T01:00:00Z")) : null, new Date("2026-11-22T01:00:00Z"))).toBe(true);
+  });
+  it("refuses when there is nothing to reset (also on a second reset) or no admin name", () => {
+    expect(applyAdminReset({ ...played, todayPlay: null }, "a")).toEqual({ ok: false, error: "NOTHING_TO_RESET" });
+    const first = applyAdminReset(played, "a");
+    if (first.ok) expect(applyAdminReset(first.state, "a")).toEqual({ ok: false, error: "NOTHING_TO_RESET" });
+    expect(applyAdminReset(played, "")).toEqual({ ok: false, error: "INVALID_AMOUNT" });
+  });
+});
+
+describe("matchUser", () => {
+  const users = [{ id: "11111111-1111-1111-1111-111111111111", email: "A@x.com" }, { id: "22222222-2222-2222-2222-222222222222", email: null }];
+  it("matches exact email (case-insensitive) or exact id, never partial", () => {
+    expect(matchUser(users, " a@X.com ")?.id).toBe(users[0].id);
+    expect(matchUser(users, "22222222-2222-2222-2222-222222222222")?.id).toBe(users[1].id);
+    expect(matchUser(users, "a@x")).toBeNull();
+    expect(matchUser(users, "")).toBeNull();
+  });
+});
