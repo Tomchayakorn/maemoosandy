@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { LuckyCardRules } from "@/components/rules/LuckyCardRules";
+import { RulesGate } from "@/components/rules/RulesGate";
 import { LuckyCardGame } from "@/components/lucky-card/LuckyCardGame";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getMyWallet } from "@/lib/wallet";
@@ -21,6 +23,9 @@ export default function LuckyCardPage() {
         </h1>
         <p className="text-sm text-cream-muted">108 ข้อความมงคล · โบนัส 100 / 300 / 500 เหรียญ · รางวัลลับ “เทพประทานทรัพย์”</p>
       </header>
+      <Suspense fallback={null}>
+        <RulesForUser />
+      </Suspense>
       <Suspense fallback={<div className="h-80 animate-pulse rounded-3xl bg-gold/5" />}>
         <Gate />
       </Suspense>
@@ -50,5 +55,17 @@ async function Gate() {
           : null
       }
     />
+  );
+}
+
+/** The rules pop-up remembers its confirmation per user, so it needs the signed-in user's id (hence its own Suspense). */
+async function RulesForUser() {
+  await connection();
+  const user = await getCurrentUser();
+  if (!user) return null; // the game's own gate redirects to /login
+  return (
+    <RulesGate game="lucky-card" userId={user.id} title="กติกาการเล่นและการถอนเงิน" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
+      <LuckyCardRules />
+    </RulesGate>
   );
 }

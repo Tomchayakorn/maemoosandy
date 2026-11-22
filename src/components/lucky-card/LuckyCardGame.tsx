@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { getLuckyCardMessage, LUCKY_CARD_CATEGORY_LABEL } from "@/data/lucky-card-messages";
+import { GUARANTEE_DRY_COINS, GUARANTEE_DRY_ROUNDS, GUARANTEE_EVERY_COINS, GUARANTEE_EVERY_ROUNDS } from "@/lib/lucky-card/guarantee";
 import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress } from "@/lib/lucky-card/bonus";
 import type { LuckyCardOutcome, LuckyCardPlayResponse } from "@/lib/lucky-card/types";
 import { formatCoins } from "@/lib/pricing";
@@ -22,11 +23,6 @@ import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
  */
 export const LUCKY_CARD_COST = 20; // display + optimistic hold only; the server charges from its own constant
 export const LUCKY_CARD_COUNT = 8;
-// display only; the server/database apply the real guarantee (lucky-card-config.ts GUARANTEE_*, migration 0015)
-const GUARANTEE_DRY_ROUNDS = 10;
-const GUARANTEE_DRY_COINS = 15;
-const GUARANTEE_EVERY_ROUNDS = 25;
-const GUARANTEE_EVERY_COINS = 40;
 const CARD_BACK_SRC = "/images/card-back-mandala.jpg";
 
 type Phase =

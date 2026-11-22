@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { RulesGate } from "@/components/rules/RulesGate";
+import { WheelRules } from "@/components/rules/WheelRules";
 import { WheelExperience } from "./wheel-experience";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLocalQuota, shouldUseLocalWithdrawals } from "@/lib/withdrawals-local";
@@ -25,6 +27,9 @@ export default function LuckyWheelPage() {
         </h1>
         <p className="text-sm text-cream-muted">หมุนลุ้นเหรียญโบนัส สิทธิ์ดูดวงฟรี และแจ็กพอต 5,000 เหรียญ</p>
       </header>
+      <Suspense fallback={null}>
+        <RulesForUser />
+      </Suspense>
 
       <Suspense fallback={<div className="mx-auto aspect-square w-full animate-pulse rounded-full bg-gold/5" />}>
         <WheelGate />
@@ -74,5 +79,17 @@ async function WheelGate() {
       />
       {quota > 0 && <JackpotBanner count={quota} />}
     </>
+  );
+}
+
+/** The rules pop-up remembers its confirmation per user, so it needs the signed-in user's id (hence its own Suspense). */
+async function RulesForUser() {
+  await connection();
+  const user = await getCurrentUser();
+  if (!user) return null; // the game's own gate redirects to /login
+  return (
+    <RulesGate game="wheel" userId={user.id} title="กติกาการเล่นและการถอนเงิน" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
+      <WheelRules />
+    </RulesGate>
   );
 }
