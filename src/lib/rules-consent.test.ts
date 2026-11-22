@@ -40,3 +40,9 @@ describe("rules consent", () => {
     expect(hasConfirmedRules(k, broken)).toBe(true);
   });
 });
+
+describe("cat-game", () => {
+  it("has its own key", () => {
+    expect(rulesConsentKey("cat-game", "u1")).not.toBe(rulesConsentKey("wheel", "u1"));
+  });
+});

@@ -305,6 +305,14 @@ wait for the owner's confirmation before starting the next.
   Natural odds per 10,000: 100-coin 16 · 300-coin 52 · 500-coin 1 · secret 2. Return (bonus counted twice, secret at 1,000) = **46.1%** (owner keeps ~54%); `expectedReturnPer20()` is an exact Markov-chain value and `draw.test.ts` simulates 1,000,000 rounds (46.2%, max dry streak 9).
   UI: countdown box "อีก N รอบ การันตีโบนัส …" (display only, counters come from the server response / wallet row). The "reveal the other cards faintly" idea was NOT built: outcomes are a single server roll, so any content shown on the other cards would be invented.
 
+- **"น้องเหมียว 9 ชีวิต" cat game (code done 2026-11-22, awaiting owner review):** 9 coins/round, ONE play per Bangkok calendar day, pick 1 of 9 cats (3 orange / 3 black / 3 white, `public/images/cat-*.jpeg`),
+  reward 200/300/400/500/1,000 coins each with an equal 20% chance, ALL credited to the main wallet (no tally, no separate withdrawal). Constants + board + daily-limit reference model: `src/lib/cat-game/config.ts` (client-safe; add more
+  pictures per colour in `CAT_IMAGES`); crypto draw: `src/lib/cat-game/draw.ts`. `POST /api/cat-game/play` ({catIndex} only) → RPC `play_cat_game` (**MIGRATION `0016_cat_game.sql`, run after 0015**): wallet FOR UPDATE, `cat_game_plays` UNIQUE(user_id, play_date)
+  → ALREADY_PLAYED_TODAY, INSUFFICIENT_COINS, charge + prize + 2 ledger rows (`catgame`, `catgame_prize`) in one transaction; without 0016 the route answers 503 and the page shows "not ready". Page `/cat-game` (protected prefix), home card, rules pop-up
+  (`RulesGate game="cat-game"`, `CatGameRules`). **Economics: average payout 480 coins for a 9-coin play (expected loss ≈ 471 coins per player per day) — see the owner note when it was built.**
+  **Surprise pop-up (2026-11-22):** on the home page only (`CatSurpriseGate` in `src/app/page.tsx`, reads wallet + today's play) a modal appears when the balance is 9–20 coins and today's play is unused ("offer"), or <9 coins ("low": needs ≥ 9 to start, top-up link). Rules in `src/lib/cat-game/surprise.ts`;
+  a dismissal is kept in sessionStorage per user + state + Bangkok day (no re-pop). The pop-up only advertises the game — the server does NOT limit play to 9–20 coins.
+
 ## Pre-launch checklist (before real customers pay)
 1. **Switch slip verification to live** in `.env.local` / the hosting env — delete the `SLIP_PROVIDER=mock` line (and its
    comment) and set:

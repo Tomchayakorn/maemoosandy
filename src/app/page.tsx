@@ -1,3 +1,10 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { CatSurprise } from "@/components/cat-game/CatSurprise";
+import { bangkokDate } from "@/lib/cat-game/config";
+import { catSurpriseState } from "@/lib/cat-game/surprise";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import { getMyWallet } from "@/lib/wallet";
 import { Hero } from "@/components/home/Hero";
 import { ServiceCard } from "@/components/home/ServiceCard";
 import { GoldButton } from "@/components/ui/GoldButton";
@@ -6,11 +13,14 @@ import { SectionTitle } from "@/components/ui/SectionTitle";
 import { CoinIcon, StarChartIcon, TarotIcon, WheelIcon } from "@/components/ui/icons";
 import { FORTUNE_PRICES, formatCoins } from "@/lib/pricing";
 
-// Fully static: no session reads here — the header's user area streams separately.
+// Static page; the header's user area and the cat-game surprise pop-up stream in separately (they read the session).
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col pb-12 sm:max-w-2xl">
       <Hero />
+      <Suspense fallback={null}>
+        <CatSurpriseGate />
+      </Suspense>
 
       <section className="flex flex-col gap-4 px-4" aria-labelledby="services-title">
         <div id="services-title">
@@ -62,6 +72,18 @@ export default function Home() {
           }
           icon={<TarotIcon className="size-10" />}
         />
+        <ServiceCard
+          index={4}
+          href="/cat-game"
+          title="น้องเหมียว 9 ชีวิต จิ้มเหมียวลุ้นโชค"
+          description="จิ้มน้องเหมียว 1 ตัวจาก 9 ตัว ลุ้นเหรียญ 200 / 300 / 400 / 500 / 1,000 เหรียญ โอกาสเท่ากัน เล่นได้วันละ 1 ครั้ง"
+          price={
+            <span className="inline-flex items-center gap-1">
+              <CoinIcon className="size-4" /> {formatCoins(9)} เหรียญ / วันละ 1 ครั้ง
+            </span>
+          }
+          icon={<span className="text-4xl leading-none">🐱</span>}
+        />
       </section>
 
       <section className="mt-8 px-4">
@@ -92,4 +114,21 @@ export default function Home() {
       </footer>
     </main>
   );
+}
+
+/** Shows the น้องเหมียว 9 ชีวิต surprise when the player has 9..20 coins and has not used today's play. Reads only (RLS, own rows). */
+async function CatSurpriseGate() {
+  await connection();
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const day = bangkokDate(new Date());
+  const [wallet, played] = await Promise.all([
+    getMyWallet(),
+    (await createClient()).from("cat_game_plays").select("id").eq("play_date", day).maybeSingle(),
+  ]);
+  // table missing (migration 0016 not run) → the game is not available, so no pop-up either
+  if (!wallet || played.error) return null;
+  const state = catSurpriseState(wallet.balance, !!played.data);
+  if (!state) return null;
+  return <CatSurprise userId={user.id} state={state} bangkokDay={day} balance={wallet.balance} />;
 }

@@ -39,6 +39,7 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   NO_LUCK_CARDS: { status: 400, message: "ยังไม่มีการ์ด +ความเฮง ให้ใช้ค่ะ" },
   BUFF_ALREADY_ACTIVE: { status: 409, message: "บัฟ +ความเฮง กำลังทำงานอยู่ ใช้การ์ดใบถัดไปได้เมื่อบัฟหมดค่ะ" },
   INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
+  ALREADY_PLAYED_TODAY: { status: 409, message: "วันนี้คุณเล่นน้องเหมียว 9 ชีวิตไปแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
 };
 
 /** Convert a Supabase RPC error into a Thai API error response. */
@@ -51,7 +52,7 @@ export function rpcErrorResponse(error: { message?: string; code?: string; detai
   console.error("Unexpected RPC error:", { code: error?.code, message: error?.message, details: error?.details, hint: error?.hint });
   // PGRST202 / 42883 = the SQL function is missing: a migration has not been run on this database.
   if (error?.code === "PGRST202" || error?.code === "42883") {
-    return apiError(503, "DB_MIGRATION_MISSING", "ระบบหมุนกงล้อยังตั้งค่าฐานข้อมูลไม่ครบ กรุณาแจ้งผู้ดูแล (ยังไม่มีการหักเหรียญ)");
+    return apiError(503, "DB_MIGRATION_MISSING", "ระบบเกมยังตั้งค่าฐานข้อมูลไม่ครบ กรุณาแจ้งผู้ดูแล (ยังไม่มีการหักเหรียญ)");
   }
   return apiError(500, "INTERNAL", "ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง");
 }
