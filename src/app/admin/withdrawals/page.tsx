@@ -18,9 +18,10 @@ export default function AdminWithdrawalsPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 pb-14 pt-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-display text-3xl text-gold-gradient">คำขอถอนรางวัลแจ็กพอต</h1>
-        <Link href="/admin/cat-game" className="text-sm text-gold-light underline">
-          สิทธิ์เล่นน้องเหมียว 9 ชีวิต
-        </Link>
+        <span className="flex gap-3 text-sm text-gold-light">
+          <Link href="/admin/vouchers" className="underline">โค้ดลับ</Link>
+          <Link href="/admin/cat-game" className="underline">สิทธิ์น้องเหมียว</Link>
+        </span>
       </div>
       <Suspense fallback={<div className="h-64 animate-pulse rounded-3xl bg-gold/5" />}>
         <Data />

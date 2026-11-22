@@ -39,6 +39,11 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   NO_LUCK_CARDS: { status: 400, message: "ยังไม่มีการ์ด +ความเฮง ให้ใช้ค่ะ" },
   BUFF_ALREADY_ACTIVE: { status: 409, message: "บัฟ +ความเฮง กำลังทำงานอยู่ ใช้การ์ดใบถัดไปได้เมื่อบัฟหมดค่ะ" },
   INVALID_COST: { status: 400, message: "คำขอไม่ถูกต้อง" },
+  VOUCHER_NOT_FOUND: { status: 404, message: "โค้ดไม่ถูกต้องค่ะ ตรวจตัวอักษรอีกครั้งนะคะ" },
+  VOUCHER_DISABLED: { status: 403, message: "โค้ดนี้ปิดใช้งานแล้วค่ะ" },
+  VOUCHER_EXPIRED: { status: 410, message: "โค้ดนี้หมดอายุแล้วค่ะ" },
+  VOUCHER_ALREADY_USED: { status: 409, message: "บัญชีนี้ใช้โค้ดนี้ไปแล้วค่ะ (ใช้ได้ 1 ครั้งต่อบัญชี)" },
+  VOUCHER_FULL: { status: 409, message: "สิทธิ์เต็มแล้วค่ะ โค้ดนี้มีผู้รับสิทธิ์ครบจำนวนแล้ว" },
   NOTHING_TO_RESET: { status: 409, message: "ผู้เล่นคนนี้ยังไม่ได้เล่นวันนี้ จึงไม่มีสิทธิ์ที่ต้องรีเซ็ต" },
   ALREADY_PLAYED_TODAY: { status: 409, message: "วันนี้คุณเล่นน้องเหมียว 9 ชีวิตไปแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
 };

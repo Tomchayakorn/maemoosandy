@@ -28,7 +28,12 @@ export type LedgerReason =
   | "refund"
   | "admin"
   | "withdrawal"
-  | "withdrawal_refund";
+  | "withdrawal_refund"
+  | "luckycard"
+  | "luckycard_bonus"
+  | "catgame"
+  | "catgame_prize"
+  | "voucher";
 
 export type Database = {
   public: {
@@ -233,6 +238,37 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      voucher_codes: {
+        Row: {
+          id: string;
+          code: string;
+          coins: number;
+          max_redemptions: number;
+          redeemed_count: number;
+          expires_at: Timestamp;
+          is_active: boolean;
+          note: string | null;
+          created_by: string;
+          created_at: Timestamp;
+        };
+        Insert: {
+          code: string;
+          coins: number;
+          max_redemptions: number;
+          expires_at: Timestamp;
+          note?: string | null;
+          created_by: string;
+          is_active?: boolean;
+        };
+        Update: { is_active?: boolean };
+        Relationships: [];
+      };
+      voucher_redemptions: {
+        Row: { id: string; voucher_id: string; user_id: string; coins: number; created_at: Timestamp };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       cat_game_admin_resets: {
         Row: {
           id: string;
@@ -385,6 +421,10 @@ export type Database = {
         Args: { p_request_id: string; p_approve: boolean; p_reviewer: string };
         Returns: Json; // { status }
       };
+      redeem_voucher: {
+        Args: { p_user_id: string; p_code: string };
+        Returns: Json; // { coins, balance, redemption_id }
+      };
       claim_daily_summary: {
         Args: { p_date: string };
         Returns: boolean; // true = this caller must send the summary for that Bangkok date
@@ -484,6 +524,11 @@ export const RPC_ERRORS = [
   "INVALID_TIER",
   "ALREADY_PLAYED_TODAY",
   "NOTHING_TO_RESET",
+  "VOUCHER_NOT_FOUND",
+  "VOUCHER_DISABLED",
+  "VOUCHER_EXPIRED",
+  "VOUCHER_ALREADY_USED",
+  "VOUCHER_FULL",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

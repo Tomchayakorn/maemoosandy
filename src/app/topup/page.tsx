@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { VoucherTrigger } from "@/components/voucher/VoucherTrigger";
 import { TopupExperience, type RecentTopup } from "./topup-experience";
 import { PACKAGES } from "@/lib/packages";
 import { promptPayQr, promptPayReceiverName, type PromptPayQr } from "@/lib/promptpay";
@@ -23,6 +24,7 @@ export default function TopupPage() {
           <span className="text-gold-gradient">เติมเหรียญ</span>
         </h1>
         <p className="text-sm text-cream-muted">สแกนพร้อมเพย์ แนบสลิป รับเหรียญทันทีหลังตรวจสอบ</p>
+        <VoucherTrigger variant="inline" />
       </header>
 
       <Suspense fallback={<div className="h-[32rem] animate-pulse rounded-3xl bg-gold/5" />}>

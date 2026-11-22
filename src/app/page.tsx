@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { VoucherTrigger } from "@/components/voucher/VoucherTrigger";
 import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { Hero } from "@/components/home/Hero";
 import { ServiceCard } from "@/components/home/ServiceCard";
@@ -16,6 +17,11 @@ export default function Home() {
       <Suspense fallback={null}>
         <CatSurpriseHost />
       </Suspense>
+
+      {/* กิจกรรมพิเศษ: compact so the main game cards stay high on the phone screen */}
+      <section className="mb-3 px-4" aria-label="โค้ดลับจากแม่มู">
+        <VoucherTrigger variant="card" />
+      </section>
 
       <section className="flex flex-col gap-4 px-4" aria-labelledby="services-title">
         <div id="services-title">

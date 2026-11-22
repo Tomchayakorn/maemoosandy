@@ -8,7 +8,10 @@ import { notifyAdminLine } from "@/lib/line-notify";
  */
 
 /** Codes that are normal, user-level outcomes: no alert. */
-const EXPECTED_CODES = ["INSUFFICIENT_COINS", "ALREADY_PLAYED_TODAY", "NOTHING_TO_RESET", "NO_SPIN_TICKETS"] as const;
+const EXPECTED_CODES = [
+  "INSUFFICIENT_COINS", "ALREADY_PLAYED_TODAY", "NOTHING_TO_RESET", "NO_SPIN_TICKETS",
+  "VOUCHER_NOT_FOUND", "VOUCHER_DISABLED", "VOUCHER_EXPIRED", "VOUCHER_ALREADY_USED", "VOUCHER_FULL",
+] as const;
 
 type ErrorLike = { message?: string; code?: string; details?: string | null; hint?: string | null } | Error | string | null | undefined;
 
