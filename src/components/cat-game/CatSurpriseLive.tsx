@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { hasSurpriseBlock, subscribeSurpriseBlock } from "@/lib/cat-game/surprise-block";
-import { surpriseToShow } from "@/lib/cat-game/surprise";
+import { SURPRISE_GRACE_MS, surpriseToShow } from "@/lib/cat-game/surprise";
 import { walletBus } from "@/lib/wallet-bus";
 import { CatSurprise } from "./CatSurprise";
 
@@ -33,7 +33,15 @@ function Inner({ userId, bangkokDay, initialBalance }: { userId: string; bangkok
   );
   const blocked = useSyncExternalStore(subscribeBlocked, isBlocked, () => true); // server: blocked → never in the HTML
   const state = surpriseToShow(balance, false, blocked);
-  if (!state) return null;
+  // short grace period once the screen is free, so the player first sees the result; keyed by state+balance so each new balance gets its own
+  const wantKey = state ? `${state}:${balance}` : null;
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!wantKey) return;
+    const t = setTimeout(() => setReadyKey(wantKey), SURPRISE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [wantKey]);
+  if (!state || readyKey !== wantKey) return null;
   return <CatSurprise userId={userId} state={state} bangkokDay={bangkokDay} balance={balance} />;
 }
 

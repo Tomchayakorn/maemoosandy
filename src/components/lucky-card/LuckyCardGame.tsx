@@ -73,7 +73,7 @@ export function LuckyCardGame({
   }, [balance]);
   useEffect(() => () => walletBus.release(balanceRef.current), []);
 
-  useSurpriseBlock(phase.name !== "pick"); // no cat-game surprise while a round or its result is on screen
+  useSurpriseBlock(phase.name === "loading"); // no cat-game surprise while a round is being drawn (the inline result card does not block it; a short delay lets it be seen first)
 
   const notEnough = balance < LUCKY_CARD_COST;
 

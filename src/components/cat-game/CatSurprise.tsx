@@ -14,7 +14,7 @@ const SAMPLE = [buildBoard()[0], buildBoard()[1], buildBoard()[2]]; // one cat o
  * (catSurpriseState); this component only shows it once per session / state / day and remembers a dismissal.
  */
 export function CatSurprise({ userId, state, bangkokDay, balance }: { userId: string; state: SurpriseState; bangkokDay: string; balance: number }) {
-  const key = surpriseDismissKey(userId, state, bangkokDay);
+  const key = surpriseDismissKey(userId, state, bangkokDay, balance);
   // server snapshot = dismissed, so the server HTML never contains the pop-up
   const dismissed = useSyncExternalStore(
     subscribeSurprise,

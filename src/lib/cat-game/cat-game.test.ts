@@ -111,20 +111,21 @@ describe("surprise dismissal", () => {
   it("a dismissed pop-up stays closed for that user/state/day, but not for others", () => {
     _resetSurpriseMemory();
     const s = fake();
-    const k = surpriseDismissKey("u1", "offer", "2026-11-22");
+    const k = surpriseDismissKey("u1", "offer", "2026-11-22", 40);
     expect(isSurpriseDismissed(k, s)).toBe(false);
     dismissSurprise(k, s);
     expect(isSurpriseDismissed(k, s)).toBe(true);
     _resetSurpriseMemory();
     expect(isSurpriseDismissed(k, s)).toBe(true); // survives a reload within the session (storage)
-    expect(isSurpriseDismissed(surpriseDismissKey("u1", "low", "2026-11-22"), s)).toBe(false);
-    expect(isSurpriseDismissed(surpriseDismissKey("u2", "offer", "2026-11-22"), s)).toBe(false);
-    expect(isSurpriseDismissed(surpriseDismissKey("u1", "offer", "2026-11-23"), s)).toBe(false); // next day asks again
+    expect(isSurpriseDismissed(surpriseDismissKey("u1", "low", "2026-11-22", 40), s)).toBe(false);
+    expect(isSurpriseDismissed(surpriseDismissKey("u2", "offer", "2026-11-22", 40), s)).toBe(false);
+    expect(isSurpriseDismissed(surpriseDismissKey("u1", "offer", "2026-11-23", 40), s)).toBe(false); // next day asks again
+    expect(isSurpriseDismissed(surpriseDismissKey("u1", "offer", "2026-11-22", 30), s)).toBe(false); // a new balance (next round) asks again
   });
   it("works when sessionStorage is blocked", () => {
     _resetSurpriseMemory();
     const broken = { getItem: () => { throw new Error("x"); }, setItem: () => { throw new Error("x"); } };
-    const k = surpriseDismissKey("u3", "low", "2026-11-22");
+    const k = surpriseDismissKey("u3", "low", "2026-11-22", 5);
     expect(() => dismissSurprise(k, broken)).not.toThrow();
     expect(isSurpriseDismissed(k, broken)).toBe(true);
   });
@@ -202,5 +203,16 @@ describe("surprise appears live and never on top of another pop-up", () => {
     expect(hasSurpriseBlock()).toBe(false);
     expect(n).toBe(4);
     off();
+  });
+});
+
+describe("regression: closed once earlier in the day, still shows when a round leaves 40 coins", () => {
+  it("dismissing the offer at 45 coins (e.g. on the home page) does not hide it at 40", () => {
+    _resetSurpriseMemory();
+    const mem = { d: new Map<string, string>(), getItem(k: string) { return this.d.get(k) ?? null; }, setItem(k: string, v: string) { this.d.set(k, v); } };
+    dismissSurprise(surpriseDismissKey("u1", "offer", "2026-11-22", 45), mem);
+    expect(isSurpriseDismissed(surpriseDismissKey("u1", "offer", "2026-11-22", 45), mem)).toBe(true); // same balance: stays closed
+    expect(isSurpriseDismissed(surpriseDismissKey("u1", "offer", "2026-11-22", 40), mem)).toBe(false); // after the round: may show
+    expect(surpriseToShow(40, false, false)).toBe("offer");
   });
 });

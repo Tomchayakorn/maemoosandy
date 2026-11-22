@@ -23,10 +23,17 @@ export function surpriseToShow(balance: number, playedToday: boolean, blocked: b
   return blocked ? null : catSurpriseState(balance, playedToday);
 }
 
-/** Dismissal is remembered per user + state + Bangkok day, for this browser session only, so a closed pop-up does not come back. */
-export function surpriseDismissKey(userId: string, state: SurpriseState, bangkokDay: string): string {
-  return `bnm:cat-surprise:${userId}:${state}:${bangkokDay}`;
+/**
+ * Dismissal is remembered per user + state + Bangkok day + BALANCE, for this browser session only. So closing it does not bring it back
+ * at the same balance (reload, another page), but once the balance changes (e.g. a round leaves 40 coins) a fresh chance to show it exists.
+ * (Without the balance in the key, closing it once on the home page hid it for the whole day in that state.)
+ */
+export function surpriseDismissKey(userId: string, state: SurpriseState, bangkokDay: string, balance: number): string {
+  return `bnm:cat-surprise:${userId}:${state}:${bangkokDay}:${balance}`;
 }
+
+/** After the screen becomes free, wait this long before showing the pop-up, so a result / confetti is seen first. */
+export const SURPRISE_GRACE_MS = 1200;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 const memory = new Set<string>(); // used when sessionStorage is blocked: lasts until the tab closes
