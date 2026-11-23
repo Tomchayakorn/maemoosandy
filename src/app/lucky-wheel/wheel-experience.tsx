@@ -8,6 +8,7 @@ import { goldCelebration } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { MysticCard } from "@/components/ui/MysticCard";
 import { formatCoins, WHEEL_SPIN_COST } from "@/lib/pricing";
+import { WITHDRAW_COINS, WITHDRAW_THB } from "@/lib/withdrawals";
 import { FantasyWheel } from "@/components/wheel/FantasyWheel";
 import { SpinFx, type SpinFxState } from "@/components/wheel/SpinFx";
 import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
@@ -67,6 +68,7 @@ export function WheelExperience({
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [goingWithdraw, setGoingWithdraw] = useState(false); // jackpot cash-out button: one tap only
   const [result, setResult] = useState<SpinResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +134,7 @@ export function WheelExperience({
     if (timer.current) clearTimeout(timer.current);
     setFx(null); // fade the overlay out…
     wheelSfx.stop(); // …and the spin sound, right as the reward modal appears
+    setGoingWithdraw(false);
     setTickets(res.spinTickets);
     setBalance(res.balance);
     setFreeReadings(res.freeReadingTickets);
@@ -474,7 +477,7 @@ export function WheelExperience({
               aria-label="ผลการหมุนกงล้อ"
               initial={{ scale: 0.85, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="w-full max-w-sm"
+              className="max-h-[92dvh] w-full max-w-sm overflow-y-auto pb-20"
             >
               <MysticCard className="flex flex-col items-center gap-4 px-6 py-8 text-center">
                 {result.reward.type === "none" ? (
@@ -529,6 +532,28 @@ export function WheelExperience({
                   </p>
                 )}
                 <div className="mt-2 flex w-full flex-col gap-2">
+                  {jackpot && result.reward.type === "coins" && (
+                    <>
+                      <GoldButton
+                        size="lg"
+                        className="w-full"
+                        data-testid="jackpot-withdraw"
+                        disabled={goingWithdraw}
+                        onClick={() => {
+                          if (goingWithdraw) return;
+                          setGoingWithdraw(true);
+                          router.push("/withdraw");
+                        }}
+                      >
+                        {goingWithdraw ? "กำลังเปิดหน้าถอน..." : `ขอถอนเงิน ${WITHDRAW_THB.toLocaleString("th-TH")} บาท`}
+                      </GoldButton>
+                      {result.balance < WITHDRAW_COINS && (
+                        <p className="text-xs text-cream-muted">
+                          ต้องมียอดเหรียญอย่างน้อย {WITHDRAW_COINS.toLocaleString("th-TH")} เหรียญจึงจะถอนได้ (สิทธิ์ถอนเก็บไว้ให้แล้ว)
+                        </p>
+                      )}
+                    </>
+                  )}
                   {result.spinTickets > 0 ? (
                     <GoldButton className="w-full" onClick={() => void spin()} disabled={spinning}>
                       หมุนฟรีต่อ (เหลือ {result.spinTickets} สิทธิ์)
