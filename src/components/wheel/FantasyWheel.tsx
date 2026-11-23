@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   animate,
   motion,
-  useAnimationFrame,
   useMotionValue,
   useMotionValueEvent,
   useReducedMotion,
@@ -12,10 +11,10 @@ import {
 import { WHEEL_SEGMENTS, type WheelSegment } from "@/lib/wheel/segments";
 
 /**
- * Fairytale golden wheel: layered SVG (no 3D library). Everything that moves does so via a
- * motion value, a CSS keyframe or one rAF loop — no SVG filters on rotating content.
+ * Fairytale golden wheel: layered SVG (no 3D library). Only the disc (spin) and the pointer tick move — the halo, rim and glows are
+ * static, so scrolling the page never forces a repaint of this SVG. No SVG filters.
  *
- *   viewBox 480×480, centre (240,240): flames r≈200–240 · rim r≈176–205 · disc r=168 · hub · pointer
+ *   viewBox 480×480, centre (240,240): static halo r≈211–236 · rim r≈176–205 · disc r=168 · hub · pointer
  */
 const C = 240;
 const R = 168; // disc radius
@@ -58,9 +57,6 @@ const TEXT: Record<WheelSegment["tone"], { fill: string; stroke: string }> = {
   gold: { fill: "#2a1a02", stroke: "#fff0b8" },
   jackpot: { fill: "#2a1400", stroke: "#fff8d6" },
 };
-
-const FLAME_OUT = "M-10 0 C-13 -11 -5 -17 -3 -25 C-2 -30 0 -33 1 -40 C6 -31 13 -15 10 0 Z";
-const FLAME_IN = "M-5 0 C-7 -7 -2 -11 -1 -16 C0 -20 0 -22 1 -26 C4 -19 7 -9 5 0 Z";
 
 type Props = {
   /** Target disc rotation in degrees (cumulative, clockwise). Changing it starts a spin. */
@@ -105,82 +101,7 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
     }
   });
 
-  // ── flame rings: one rAF loop, speed eases between idle and spinning ───
-  const rootRef = useRef<SVGSVGElement>(null);
-  const offscreen = useRef(false);
-  // scrolled out of view: pause the CSS loops (via data-offscreen) and the rAF flame loop below, unless a spin is running
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([entry]) => {
-      offscreen.current = !entry.isIntersecting;
-      el.dataset.offscreen = String(!entry.isIntersecting);
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  // while the page is being scrolled: pause every loop (CSS via html[data-scrolling]) and the rAF flame loop, resume 140 ms after the last scroll event
-  const scrolling = useRef(false);
-  useEffect(() => {
-    const html = document.documentElement;
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const onScroll = () => {
-      if (!scrolling.current) {
-        scrolling.current = true;
-        html.dataset.scrolling = "true";
-      }
-      clearTimeout(t);
-      t = setTimeout(() => {
-        scrolling.current = false;
-        delete html.dataset.scrolling;
-      }, 140);
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      clearTimeout(t);
-      delete html.dataset.scrolling;
-    };
-  }, []);
-  const fireA = useRef<SVGGElement>(null);
-  const fireB = useRef<SVGGElement>(null);
-  const angle = useRef(0);
-  const speed = useRef(10);
-  useAnimationFrame((_, delta) => {
-    if (reduce || ((offscreen.current || scrolling.current) && !spinning)) return;
-    const target = spinning ? 330 : 10; // degrees / second
-    speed.current += (target - speed.current) * Math.min(1, (delta / 1000) * (spinning ? 2.2 : 1.2));
-    angle.current = (angle.current + (speed.current * delta) / 1000) % 360;
-    fireA.current?.setAttribute("transform", `rotate(${angle.current.toFixed(2)} ${C} ${C})`);
-    fireB.current?.setAttribute("transform", `rotate(${(-angle.current * 0.7).toFixed(2)} ${C} ${C})`);
-  });
-
   // ── static decoration (computed once) ──────────────────────────────────
-  const flamesA = useMemo(
-    () =>
-      Array.from({ length: 16 }, (_, i) => {
-        const r = rng(i + 3);
-        return { a: i * 22.5, s: 0.95 + r() * 0.55, d: -r() * 1.2, dur: 0.55 + r() * 0.5 };
-      }),
-    [],
-  );
-  const flamesB = useMemo(
-    () =>
-      Array.from({ length: 20 }, (_, i) => {
-        const r = rng(i + 91);
-        return { a: i * 18 + 4, s: 0.55 + r() * 0.4, d: -r() * 1.2, dur: 0.4 + r() * 0.4 };
-      }),
-    [],
-  );
-  const embers = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const r = rng(i + 400);
-        const p = polar(206 + r() * 24, r() * 360);
-        return { x: p.x, y: p.y, r: 1 + r() * 2, d: -r() * 4, dur: 2.2 + r() * 2.6, big: r() > 0.7 };
-      }),
-    [],
-  );
   const sparkles = useMemo(
     () =>
       WHEEL_SEGMENTS.map((_, i) => {
@@ -195,7 +116,6 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
 
   return (
     <svg
-      ref={rootRef}
       viewBox="0 0 480 480"
       className="fw-root mx-auto block w-full"
       data-spinning={spinning}
@@ -204,27 +124,6 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
       overflow="visible"
     >
       <defs>
-        {/* flames */}
-        <linearGradient id="fw-flame-out" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#d9620a" />
-          <stop offset="0.4" stopColor="#ffa91f" />
-          <stop offset="1" stopColor="#ffe9a3" stopOpacity="0.35" />
-        </linearGradient>
-        <linearGradient id="fw-flame-in" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#ffc94a" />
-          <stop offset="0.6" stopColor="#fff0b8" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0.6" />
-        </linearGradient>
-        <radialGradient id="fw-aura" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0.68" stopColor="#ff9d1a" stopOpacity="0" />
-          <stop offset="0.82" stopColor="#ffb52e" stopOpacity="0.45" />
-          <stop offset="1" stopColor="#ff8a00" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="fw-streak" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#fff6d0" stopOpacity="0" />
-          <stop offset="1" stopColor="#fff6d0" />
-        </linearGradient>
-
         {/* rim */}
         <linearGradient id="fw-rim" x1="0.1" y1="0" x2="0.9" y2="1">
           <stop offset="0" stopColor="#fff3bd" />
@@ -317,43 +216,11 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
         </radialGradient>
       </defs>
 
-      {/* ───────── blazing golden flames ───────── */}
-      <circle cx={C} cy={C} r={236} fill="url(#fw-aura)" className="fw-aura" />
-
-      <g ref={fireB}>
-        {flamesB.map((f, i) => (
-          <g key={i} transform={`rotate(${f.a} ${C} ${C}) translate(${C} ${C - 202})`}>
-            <g
-              className="fw-flame fw-flame-b"
-              style={{ animationDelay: `${f.d}s`, animationDuration: `${f.dur}s` }}
-            >
-              <path d={FLAME_OUT} transform={`scale(${f.s})`} fill="url(#fw-flame-out)" opacity="0.8" />
-            </g>
-          </g>
-        ))}
-      </g>
-      <g ref={fireA}>
-        {flamesA.map((f, i) => (
-          <g key={i} transform={`rotate(${f.a} ${C} ${C}) translate(${C} ${C - 201})`}>
-            <g
-              className="fw-flame"
-              style={{ animationDelay: `${f.d}s`, animationDuration: `${f.dur}s` }}
-            >
-              <path d={FLAME_OUT} transform={`scale(${f.s * 1.15})`} fill="url(#fw-flame-out)" />
-              <path d={FLAME_IN} transform={`scale(${f.s * 1.15})`} fill="url(#fw-flame-in)" />
-            </g>
-          </g>
-        ))}
-        {/* speed streaks: only visible while spinning */}
-        <g className="fw-streaks" fill="none" strokeLinecap="round">
-          {[0, 120, 240].map((a) => (
-            <g key={a} transform={`rotate(${a} ${C} ${C})`}>
-              <circle cx={C} cy={C} r={214} stroke="url(#fw-streak)" strokeWidth={5} strokeDasharray="120 1224" opacity="0.9" />
-              <circle cx={C} cy={C} r={222} stroke="#ffb52e" strokeWidth={2.5} strokeDasharray="70 1325" opacity="0.8" />
-            </g>
-          ))}
-        </g>
-      </g>
+      {/* ───────── static golden-amber halo (no animation, no filter, no blur) ───────── */}
+      <circle cx={C} cy={C} r={236} fill="url(#fw-aura)" />
+      <circle cx={C} cy={C} r={226} fill="none" stroke="url(#fw-halo)" strokeWidth={6} />
+      <circle cx={C} cy={C} r={218} fill="none" stroke="url(#fw-halo)" strokeWidth={2} strokeOpacity="0.65" />
+      <circle cx={C} cy={C} r={211.5} fill="none" stroke="#fff3bd" strokeWidth={1} strokeOpacity="0.5" />
 
       {/* ───────── ornate 3D rim ───────── */}
       <circle cx={C} cy={C} r={207} fill="#241703" />
@@ -386,7 +253,7 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
         const blue = i % 2 === 1;
         return (
           <g key={i}>
-            <circle cx={g.x} cy={g.y} r={9} fill={blue ? "#4a86ff" : "#ffb21e"} opacity="0.35" className="fw-gem-glow" style={{ animationDelay: `${(i % 4) * 0.35}s` }} />
+            <circle cx={g.x} cy={g.y} r={9} fill={blue ? "#4a86ff" : "#ffb21e"} opacity="0.35" />
             <circle cx={g.x} cy={g.y} r={6.2} fill="#5b3d06" />
             <circle cx={g.x} cy={g.y} r={5} fill={blue ? "url(#fw-gem-blue)" : "url(#fw-gem-amber)"} />
             <circle cx={g.x - 1.6} cy={g.y - 1.8} r={1.4} fill="#fff" opacity="0.9" />
@@ -427,8 +294,8 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
               {/* luck-card buff: pulsing bright rim + soft glow on the highlighted slice */}
               {highlightKey === s.key && (
                 <>
-                  <path d={slicePath(i)} fill="#fff3b8" className="fw-buff-glow" />
-                  <path d={slicePath(i)} fill="none" stroke="#fff6c8" strokeWidth={4.5} className="fw-buff-rim" />
+                  <path d={slicePath(i)} fill="#fff3b8" fillOpacity="0.28" />
+                  <path d={slicePath(i)} fill="none" stroke="#fff6c8" strokeWidth={4.5} strokeOpacity="0.95" />
                 </>
               )}
               <g transform={`rotate(${i * STEP} ${C} ${C})`}>
@@ -500,7 +367,7 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
         <circle cx={C} cy={C} r={45} fill="url(#fw-hub)" stroke="#3d2903" strokeWidth={2.5} />
         <circle cx={C} cy={C} r={37} fill="url(#fw-rim-in)" />
         <circle cx={C} cy={C} r={32} fill="url(#fw-hub)" stroke="#5b3d06" strokeWidth={1.5} />
-        <circle cx={C} cy={C} r={26} fill="url(#fw-core-glow)" className="fw-core-glow" />
+        <circle cx={C} cy={C} r={26} fill="url(#fw-core-glow)" />
         <circle cx={C} cy={C} r={19} fill="#0a1450" stroke="#f3d98b" strokeWidth={2} />
         <circle cx={C} cy={C} r={16.5} fill="url(#fw-core)" />
         <ellipse cx={C - 5} cy={C - 6} rx={6} ry={3.4} fill="#fff" opacity="0.75" transform={`rotate(-30 ${C - 5} ${C - 6})`} />
@@ -525,20 +392,6 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
         <circle cx={C} cy={5} r={2.6} fill="#fff6c8" />
       </motion.g>
 
-      {/* ───────── fairy-dust embers ───────── */}
-      <g className="fw-embers" pointerEvents="none">
-        {embers.map((e, i) => (
-          <circle
-            key={i}
-            cx={e.x}
-            cy={e.y}
-            r={e.r}
-            fill={e.big ? "#fff3c4" : "#ffc43a"}
-            className="fw-ember"
-            style={{ animationDelay: `${e.d}s`, animationDuration: `${e.dur}s` }}
-          />
-        ))}
-      </g>
     </svg>
   );
 }

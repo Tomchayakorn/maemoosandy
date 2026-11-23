@@ -231,20 +231,6 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
      (.wheel-glow); this layer is promoted so scrolling only moves a texture. */
   transform: translateZ(0);
 }
-/* wheel scrolled out of view: stop every loop inside it (FantasyWheel sets data-offscreen via IntersectionObserver) */
-.fw-root[data-offscreen="true"] *,
-.fw-root[data-offscreen="true"] {
-  animation-play-state: paused !important;
-}
-/* page is being scrolled: pause the wheel's loops, the buff / hot-streak glow and the panel pulses until scrolling stops (FantasyWheel sets html[data-scrolling]) */
-html[data-scrolling="true"] .fw-root *,
-html[data-scrolling="true"] .fw-root,
-html[data-scrolling="true"] .buff-aura,
-html[data-scrolling="true"] .hot-aura,
-html[data-scrolling="true"] .buff-panel::after,
-html[data-scrolling="true"] .hot-banner::after {
-  animation-play-state: paused !important;
-}
 /* lighter gold frame for the cards under the wheel: same border and inset line, without the big soft glow */
 .wheel-lite-card.border-gold-frame {
   box-shadow: inset 0 0 0 1px rgb(243 217 139 / 0.06);
@@ -444,7 +430,7 @@ html[data-scrolling="true"] .hot-banner::after {
 .buff-aura {
   pointer-events: none;
   background: radial-gradient(circle, rgb(243 217 139 / 0.28) 0%, rgb(212 175 55 / 0.14) 45%, transparent 68%);
-  animation: bf-aura 2.2s ease-in-out infinite;
+  opacity: 0.85; /* static: the buff stays visible without animating around the wheel */
 }
 
 /* the panel keeps a static shadow; the pulse is the opacity of a brighter copy on top (compositor-only, no repaint) */
@@ -483,7 +469,7 @@ html[data-scrolling="true"] .hot-banner::after {
 .hot-aura {
   pointer-events: none;
   background: radial-gradient(circle, rgb(255 140 40 / 0.3) 0%, rgb(255 90 30 / 0.14) 48%, transparent 70%);
-  animation: hs-aura 1.8s ease-in-out infinite;
+  opacity: 0.8; /* static, like the buff aura */
 }
 @keyframes hs-banner {
   0%, 100% { opacity: 0; }
