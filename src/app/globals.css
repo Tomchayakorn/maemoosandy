@@ -533,3 +533,79 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
     opacity: 0.7;
   }
 }
+
+/* ---- Home page corner tag on a game card ("เปิดปุ๊บ รับปั๊บ" / "ไต่ไว รับง่าย"). Only transform + opacity animate (GPU-composited), slow and soft. ---- */
+.home-badge-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.home-badge-hot {
+  --badge-bg: linear-gradient(120deg, #6e0f1f, #c4283d 48%, #d4af37);
+  --badge-glow: rgb(255 92 92 / 0.55);
+}
+.home-badge-violet {
+  --badge-bg: linear-gradient(120deg, #34186e, #7c3aed 50%, #d4af37);
+  --badge-glow: rgb(168 110 255 / 0.55);
+}
+.home-badge {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 0 1.5rem 0 1rem; /* follows the card's rounded top-right corner */
+  background: var(--badge-bg);
+  padding: 0.3rem 0.8rem 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff3c4;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+  box-shadow: inset 0 0 0 1px rgb(243 217 139 / 0.55);
+  white-space: nowrap;
+}
+/* light sweeping across the tag, then a long pause */
+.home-badge::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 45%;
+  background: linear-gradient(105deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  transform: translateX(-160%) skewX(-18deg);
+  animation: home-badge-sheen 4.2s ease-in-out infinite;
+  will-change: transform;
+}
+/* soft breathing glow behind the tag */
+.home-badge-glow {
+  position: absolute;
+  inset: -2px -2px -2px -4px;
+  border-radius: 0 1.5rem 0 1rem;
+  background: var(--badge-glow);
+  filter: blur(7px);
+  opacity: 0.35;
+  animation: home-badge-glow 3.2s ease-in-out infinite;
+  will-change: opacity;
+}
+@keyframes home-badge-sheen {
+  0%, 55% { transform: translateX(-160%) skewX(-18deg); }
+  100% { transform: translateX(420%) skewX(-18deg); }
+}
+@keyframes home-badge-glow {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-badge::after {
+    animation: none;
+    opacity: 0;
+    will-change: auto;
+  }
+  .home-badge-glow {
+    animation: none;
+    opacity: 0.4;
+    will-change: auto;
+  }
+}

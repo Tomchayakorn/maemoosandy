@@ -88,6 +88,8 @@ export default function Home() {
         <ServiceCard
           index={5}
           href="/mystic-chests"
+          badge="💎 เปิดปุ๊บ รับปั๊บ"
+          badgeTone="gold-red"
           title="เปิดหีบมนตรา วัดใจสะสมตัวคูณ"
           description="เปิดหีบทีละใบ หลบจุดอาถรรพ์ 1–3 จุด ตัวคูณยิ่งเปิดยิ่งสูง กดรับเหรียญเมื่อไรก็ได้ รับสูงสุด 5,000 เหรียญต่อรอบ"
           price={
@@ -100,6 +102,8 @@ export default function Home() {
         <ServiceCard
           index={6}
           href="/power-wheel"
+          badge="⚡ ไต่ไว รับง่าย"
+          badgeTone="violet"
           title="วงล้อไต่ชั้น สะสมพลัง เสี่ยงข้ามชั้น"
           description="หมุนวงล้อไต่ชั้นทีละขั้น พลังสะสมยิ่งสูง ตัดสินใจหยุดรับเหรียญหรือเสี่ยงหมุนต่อ โบนัสสูงสุดต่อรอบ 3,000 เหรียญ รางวัลสะสมเข้ากระเป๋าเหรียญ"
           price={
