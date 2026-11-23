@@ -3,7 +3,7 @@
 -- ONE DO block = one transaction that always ends with an exception on purpose, so EVERYTHING is rolled back (no coins, ledger rows or rounds kept).
 --   * success -> the editor shows an "error" whose text starts with  ALL PASSED  followed by the PASS lines (this is the expected result)
 --   * failure -> the error text starts with  FAIL:  and says which check broke
--- Needs at least one signed-up user (a wallet row). Level 1 danger slice = 0; level 2 danger slices = 0 and 5; safe slice on levels 1-2 = 1.
+-- Needs at least one signed-up user (a wallet row). Danger slices: level 1 and 2 = {0}; level 3 and 4 = {0, 5}; slices 1 and 3 are safe on every level.
 
 do $$
 declare
@@ -22,7 +22,10 @@ begin
   if public.power_multiplier_bp(1) <> 10000 or public.power_multiplier_bp(2) <> 11111 or public.power_multiplier_bp(12) <> 2460474 then raise exception 'FAIL: multiplier table'; end if;
   if public.power_multiplier_bp(13) is not null or public.power_payout(100, 13) <> 0 or public.power_payout(100, 0) <> 0 then raise exception 'FAIL: impossible level must pay 0'; end if;
   if public.power_payout(10, 1) <> 10 or public.power_payout(100, 2) <> 111 or public.power_payout(100, 9) <> 1968 or public.power_payout(100, 10) <> 3000 or public.power_payout(100, 11) <> 3000 then raise exception 'FAIL: payout / cap'; end if;
-  if not public.power_slice_is_danger(1, 0) or public.power_slice_is_danger(1, 1) or not public.power_slice_is_danger(2, 5) or public.power_slice_is_danger(2, 2) then raise exception 'FAIL: danger slices'; end if;
+  if not public.power_slice_is_danger(1, 0) or public.power_slice_is_danger(1, 1) then raise exception 'FAIL: danger slices level 1'; end if;
+  -- level 2 still has ONE danger slice (0); the second one (5) only appears on level 3
+  if not public.power_slice_is_danger(2, 0) or public.power_slice_is_danger(2, 5) then raise exception 'FAIL: danger slices level 2'; end if;
+  if not public.power_slice_is_danger(3, 0) or not public.power_slice_is_danger(3, 5) or public.power_slice_is_danger(3, 2) then raise exception 'FAIL: danger slices level 3'; end if;
   msgs := msgs || E'\nPASS 1: multipliers, payout, 3,000 cap, danger slices';
 
   -- 2. start: validation, charge, one active round -----------------------------------------------------
