@@ -395,6 +395,8 @@ export function WheelExperience({
 
       {/* Wheel (extends to the screen edges so the flame ring has room on phones) */}
       <div ref={wheelBox} data-wheel-box className="relative -mx-4 w-[calc(100%+2rem)] max-w-[30rem] self-center">
+        {/* soft orange glow (static gradient, replaces the old per-frame drop-shadow filter) */}
+        <div aria-hidden className="wheel-glow absolute inset-0" />
         {/* luck-card buff: soft golden aura behind the wheel (inside the box, never wider than the screen) */}
         {hotRounds > 0 && <div aria-hidden data-testid="hot-aura" className="hot-aura absolute inset-[3%] rounded-full" />}
         {buffRounds > 0 && <div aria-hidden data-testid="buff-aura" className="buff-aura absolute inset-[6%] rounded-full" />}
@@ -466,7 +468,7 @@ export function WheelExperience({
       <AnimatePresence>
         {result && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-velvet/80 px-5 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-velvet/90 px-5"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

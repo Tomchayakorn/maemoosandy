@@ -6,7 +6,6 @@ export function MysticCard({ className = "", ...props }: ComponentProps<"div">) 
     <div
       className={
         "border-gold-frame relative rounded-3xl bg-[linear-gradient(160deg,rgb(21_19_31/0.92),rgb(10_16_36/0.92))] " +
-        "backdrop-blur-sm " +
         className
       }
       {...props}

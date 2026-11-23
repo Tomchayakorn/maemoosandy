@@ -227,7 +227,20 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
 .fw-root {
   --fw-boost: 1;
   transition: --fw-boost 0.7s ease-out;
-  filter: drop-shadow(0 14px 38px rgb(255 160 30 / 0.28));
+  /* No filter/drop-shadow here: it would be re-blurred on every animation frame. The glow is a static gradient behind the wheel
+     (.wheel-glow); this layer is promoted so scrolling only moves a texture. */
+  transform: translateZ(0);
+}
+/* wheel scrolled out of view: stop every loop inside it (FantasyWheel sets data-offscreen via IntersectionObserver) */
+.fw-root[data-offscreen="true"] *,
+.fw-root[data-offscreen="true"] {
+  animation-play-state: paused !important;
+}
+/* soft orange glow behind the wheel: a static radial gradient (no blur filter, no animation) */
+.wheel-glow {
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(255 160 30 / 0.22) 0%, rgb(255 140 20 / 0.12) 45%, transparent 68%);
+  transform: translateY(14px);
 }
 .fw-root[data-spinning="true"] {
   --fw-boost: 1.5;
@@ -421,17 +434,32 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
   animation: bf-aura 2.2s ease-in-out infinite;
 }
 
+/* the panel keeps a static shadow; the pulse is the opacity of a brighter copy on top (compositor-only, no repaint) */
 @keyframes bf-panel {
-  0%, 100% { box-shadow: 0 0 10px -2px rgb(212 175 55 / 0.45), inset 0 0 0 1px rgb(243 217 139 / 0.35); }
-  50% { box-shadow: 0 0 26px 0 rgb(243 217 139 / 0.75), inset 0 0 0 1px rgb(255 246 200 / 0.8); }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
-.buff-panel { animation: bf-panel 1.6s ease-in-out infinite; }
+.buff-panel {
+  position: relative;
+  box-shadow: 0 0 10px -2px rgb(212 175 55 / 0.45), inset 0 0 0 1px rgb(243 217 139 / 0.35);
+}
+.buff-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 26px 0 rgb(243 217 139 / 0.75), inset 0 0 0 1px rgb(255 246 200 / 0.8);
+  opacity: 0;
+  animation: bf-panel 1.6s ease-in-out infinite;
+  will-change: opacity;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .fw-buff-rim { animation: none; opacity: 0.9; }
   .fw-buff-glow { animation: none; opacity: 0.25; }
   .buff-aura { animation: none; opacity: 0.7; }
-  .buff-panel { animation: none; }
+  .buff-panel::after { animation: none; opacity: 0.4; will-change: auto; }
 }
 
 /* ── hot streak (มือขึ้น 5 ตาติด): warm orange glow, distinct from the gold luck-card buff ───────── */
@@ -445,13 +473,27 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
   animation: hs-aura 1.8s ease-in-out infinite;
 }
 @keyframes hs-banner {
-  0%, 100% { box-shadow: 0 0 10px -2px rgb(255 150 50 / 0.5); }
-  50% { box-shadow: 0 0 24px 0 rgb(255 170 60 / 0.85); }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
-.hot-banner { animation: hs-banner 1.4s ease-in-out infinite; }
+.hot-banner {
+  position: relative;
+  box-shadow: 0 0 10px -2px rgb(255 150 50 / 0.5);
+}
+.hot-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 24px 0 rgb(255 170 60 / 0.85);
+  opacity: 0;
+  animation: hs-banner 1.4s ease-in-out infinite;
+  will-change: opacity;
+}
 @media (prefers-reduced-motion: reduce) {
   .hot-aura { animation: none; opacity: 0.7; }
-  .hot-banner { animation: none; }
+  .hot-banner::after { animation: none; opacity: 0.4; will-change: auto; }
 }
 
 /* เปิดหีบมนตรา — reveal animations (components/mystic/ChestTile.tsx).

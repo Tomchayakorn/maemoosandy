@@ -106,12 +106,25 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
   });
 
   // ── flame rings: one rAF loop, speed eases between idle and spinning ───
+  const rootRef = useRef<SVGSVGElement>(null);
+  const offscreen = useRef(false);
+  // scrolled out of view: pause the CSS loops (via data-offscreen) and the rAF flame loop below, unless a spin is running
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => {
+      offscreen.current = !entry.isIntersecting;
+      el.dataset.offscreen = String(!entry.isIntersecting);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const fireA = useRef<SVGGElement>(null);
   const fireB = useRef<SVGGElement>(null);
   const angle = useRef(0);
   const speed = useRef(10);
   useAnimationFrame((_, delta) => {
-    if (reduce) return;
+    if (reduce || (offscreen.current && !spinning)) return;
     const target = spinning ? 330 : 10; // degrees / second
     speed.current += (target - speed.current) * Math.min(1, (delta / 1000) * (spinning ? 2.2 : 1.2));
     angle.current = (angle.current + (speed.current * delta) / 1000) % 360;
@@ -159,6 +172,7 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
 
   return (
     <svg
+      ref={rootRef}
       viewBox="0 0 480 480"
       className="fw-root mx-auto block w-full"
       data-spinning={spinning}
