@@ -52,6 +52,8 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   ROUND_NOT_ACTIVE: { status: 409, message: "รอบนี้จบไปแล้วค่ะ" },
   TILE_ALREADY_OPENED: { status: 409, message: "หีบใบนี้เปิดไปแล้วค่ะ" },
   NO_SAFE_TILE: { status: 400, message: "ต้องเปิดหีบปลอดภัยอย่างน้อย 1 ใบก่อนจึงรับเหรียญได้ค่ะ" },
+  INVALID_SLICE: { status: 400, message: "คำขอไม่ถูกต้อง" },
+  NO_LEVEL_CLEARED: { status: 400, message: "ต้องหมุนผ่านอย่างน้อย 1 ชั้นก่อนจึงรับเหรียญได้ค่ะ" },
   NOTHING_TO_RESET: { status: 409, message: "ผู้เล่นคนนี้ยังไม่ได้เล่นวันนี้ จึงไม่มีสิทธิ์ที่ต้องรีเซ็ต" },
   ALREADY_PLAYED_TODAY: { status: 409, message: "วันนี้คุณเล่นน้องเหมียว 9 ชีวิตไปแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
 };

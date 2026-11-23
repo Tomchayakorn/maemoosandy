@@ -35,7 +35,9 @@ export type LedgerReason =
   | "catgame_prize"
   | "voucher"
   | "mystic_bet"
-  | "mystic_win";
+  | "mystic_win"
+  | "power_bet"
+  | "power_win";
 
 export type Database = {
   public: {
@@ -235,6 +237,21 @@ export type Database = {
           reviewed_by: string | null;
           reviewed_at: Timestamp | null;
           created_at: Timestamp;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      power_wheel_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          bet: number;
+          level: number;
+          status: "active" | "cashed" | "lost" | "cleared";
+          payout: number;
+          created_at: Timestamp;
+          finished_at: Timestamp | null;
         };
         Insert: never;
         Update: never;
@@ -453,6 +470,18 @@ export type Database = {
         Args: { p_user_id: string; p_round_id: string };
         Returns: Json;
       };
+      power_start: {
+        Args: { p_user_id: string; p_bet: number };
+        Returns: Json; // round view
+      };
+      power_spin: {
+        Args: { p_user_id: string; p_round_id: string; p_slice: number };
+        Returns: Json;
+      };
+      power_stop: {
+        Args: { p_user_id: string; p_round_id: string };
+        Returns: Json;
+      };
       redeem_voucher: {
         Args: { p_user_id: string; p_code: string };
         Returns: Json; // { coins, balance, redemption_id }
@@ -569,6 +598,8 @@ export const RPC_ERRORS = [
   "ROUND_NOT_ACTIVE",
   "TILE_ALREADY_OPENED",
   "NO_SAFE_TILE",
+  "INVALID_SLICE",
+  "NO_LEVEL_CLEARED",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

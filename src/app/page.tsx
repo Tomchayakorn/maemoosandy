@@ -97,6 +97,18 @@ export default function Home() {
           }
           icon={<span className="text-4xl leading-none">🎁</span>}
         />
+        <ServiceCard
+          index={6}
+          href="/power-wheel"
+          title="วงล้อไต่ชั้น สะสมพลัง เสี่ยงข้ามชั้น"
+          description="หมุนวงล้อไต่ชั้นทีละขั้น พลังสะสมยิ่งสูง ตัดสินใจหยุดรับเหรียญหรือเสี่ยงหมุนต่อ โบนัสสูงสุดต่อรอบ 3,000 เหรียญ รางวัลสะสมเข้ากระเป๋าเหรียญ"
+          price={
+            <span className="inline-flex items-center gap-1">
+              <CoinIcon className="size-4" /> เดิมพัน 10 – 100 เหรียญ
+            </span>
+          }
+          icon={<span className="text-4xl leading-none">⚡</span>}
+        />
       </section>
 
       <section className="mt-8 px-4">
