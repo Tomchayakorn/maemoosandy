@@ -12,6 +12,8 @@ import { BETS, MAX_PAYOUT, maxSafe, MINES_OPTIONS, multiplierBp, payoutFor, TILE
 import type { MysticRoundView } from "@/lib/mystic/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
+import { chestSfx } from "@/lib/audio/chestSfx";
+import { rewardTier } from "@/lib/mystic/sfx-tier";
 
 type ApiError = { error?: { message?: string } };
 /** ×1.0125, ×2.16, ×75.6 (shortest form with at least 2 decimals) */
@@ -53,6 +55,7 @@ export function MysticGame({
   useEffect(() => {
     balanceRef.current = balance;
   }, [balance]);
+  useEffect(() => () => chestSfx.stop(), []); // leaving the page: cut any sound and release the music ducking
 
   const active = round?.status === "active";
   useSurpriseBlock(active || busy); // the cat-game surprise waits during a round
@@ -103,6 +106,7 @@ export function MysticGame({
 
   async function startRound() {
     if (unavailable || busy || balance < bet) return;
+    chestSfx.prime(); // unlock audio inside this tap (no sound yet)
     const view = await call("/api/mystic/start", { bet, mines });
     if (!view) return;
     setRound(view);
@@ -113,19 +117,24 @@ export function MysticGame({
 
   async function openTile(tile: number) {
     if (!round || !active || busy || (round.openedMask >> tile) & 1) return;
+    chestSfx.open(); // the tap itself: latch + creak + sparkle, played at once (not after the server answers)
     setBusyTile(tile);
     setLastTile(tile);
     const view = await call("/api/mystic/open", { roundId: round.roundId, tile });
     setBusyTile(null);
     if (!view) return;
     setRound(view);
+    // a safe chest (or an automatic payout): the prize sound, grander for a bigger prize; a cursed chest gets none
+    if (view.status !== "lost") chestSfx.reward(rewardTier(view.payout, view.bet, view.auto));
     if (view.status !== "active") finished(view);
   }
 
   async function cashOut() {
     if (!round || !active || round.safeCount < 1 || busy) return;
+    chestSfx.prime();
     const view = await call("/api/mystic/cashout", { roundId: round.roundId });
     if (!view) return;
+    chestSfx.reward(rewardTier(view.payout, view.bet, view.auto)); // coins taken
     setRound(view);
     finished(view);
   }
