@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Charm, Cinzel, Noto_Serif_Thai, Prompt } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
+import { BackHome } from "@/components/layout/BackHome";
 import { Header } from "@/components/layout/Header";
 import { BgmBootstrap } from "@/components/audio/BgmBootstrap";
 import LineSupportButton from "@/components/LineSupportButton";
@@ -66,6 +68,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col font-sans">
         <Header />
+        <Suspense fallback={null}>
+          <BackHome />
+        </Suspense>
         {children}
         <BgmBootstrap />
         <LineSupportButton />
