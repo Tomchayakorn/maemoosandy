@@ -76,6 +76,7 @@ export function WheelExperience({
   const wheelBox = useRef<HTMLDivElement>(null);
   const rotationRef = useRef(0);
   const pending = useRef<SpinResponse | null>(null);
+  const spinLock = useRef(false); // synchronous guard: state `spinning` lags one render behind a fast double click
   const balanceRef = useRef(initialBalance);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seconds = reduce ? 0.4 : SPIN_SECONDS;
@@ -146,6 +147,7 @@ export function WheelExperience({
     walletBus.release(res.balance); // header badge: reveal the final balance together with the prize modal
     setResult(res);
     setSpinning(false);
+    spinLock.current = false;
     if (res.reward.type !== "none") {
       goldCelebration();
       if (res.reward.value >= 400) {
@@ -156,8 +158,14 @@ export function WheelExperience({
     router.refresh(); // header menu shows spin tickets
   }
 
-                  async function spin() {
-    if (spinning || !canSpin) return;
+  async function spin() {
+    if (spinLock.current || spinning) return;
+    if (!canSpin) {
+      setResult(null);
+      setError(`เหรียญไม่พอสำหรับหมุน (ต้องมีอย่างน้อย ${WHEEL_SPIN_COST} เหรียญ หรือมีสิทธิ์หมุนฟรี) เติมเหรียญก่อนนะคะ`);
+      return;
+    }
+    spinLock.current = true;
     setError(null);
     setNotice(null);
     setResult(null);
@@ -221,6 +229,7 @@ export function WheelExperience({
         }
         router.refresh();
         setSpinning(false);
+        spinLock.current = false;
         return;
       }
 
@@ -245,6 +254,7 @@ export function WheelExperience({
       router.refresh();
       setError("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้งนะคะ");
       setSpinning(false);
+      spinLock.current = false;
     }
   }
   /** "ใช้การ์ด": the server locks the wallet; a second click / tab gets BUFF_ALREADY_ACTIVE and just re-syncs. */
@@ -520,11 +530,11 @@ export function WheelExperience({
                 )}
                 <div className="mt-2 flex w-full flex-col gap-2">
                   {result.spinTickets > 0 ? (
-                    <GoldButton className="w-full" onClick={() => setResult(null)}>
+                    <GoldButton className="w-full" onClick={() => void spin()} disabled={spinning}>
                       หมุนฟรีต่อ (เหลือ {result.spinTickets} สิทธิ์)
                     </GoldButton>
                   ) : result.balance >= WHEEL_SPIN_COST ? (
-                    <GoldButton className="w-full" onClick={() => setResult(null)}>
+                    <GoldButton className="w-full" onClick={() => void spin()} disabled={spinning}>
                       ปิดแล้วหมุนต่อ (ใช้ {WHEEL_SPIN_COST} เหรียญ)
                     </GoldButton>
                   ) : (
