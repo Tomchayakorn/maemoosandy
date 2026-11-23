@@ -325,7 +325,7 @@ export function WheelExperience({
       {/* Tickets */}
       <div
         aria-live="polite"
-        className="rounded-full border border-gold/50 bg-velvet/80 px-5 py-2 text-sm text-cream shadow-[0_0_16px_-4px_rgb(212_175_55/0.5)]"
+        className="rounded-full border border-gold/50 bg-velvet/80 px-5 py-2 text-sm text-cream shadow-[0_0_8px_-4px_rgb(212_175_55/0.5)]"
       >
         สิทธิ์หมุนฟรีคงเหลือ{" "}
         <b data-testid="spin-tickets" className="font-tarot text-lg tabular-nums text-gold-light">
@@ -349,7 +349,7 @@ export function WheelExperience({
       {(luckCards > 0 || buffRounds > 0) && (
         <div
           data-testid="luck-panel"
-          className={"flex w-full flex-col gap-2 rounded-2xl border border-gold/50 bg-velvet/80 px-4 py-3 shadow-[0_0_16px_-6px_rgb(212_175_55/0.5)]" + (buffRounds > 0 ? " buff-panel" : "")}
+          className={"flex w-full flex-col gap-2 rounded-2xl border border-gold/50 bg-velvet/80 px-4 py-3 shadow-[0_0_8px_-6px_rgb(212_175_55/0.5)]" + (buffRounds > 0 ? " buff-panel" : "")}
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-cream">
@@ -453,7 +453,7 @@ export function WheelExperience({
 
       {wheelCash !== null && <WheelCashPanel total={wheelCash} pending={initialCashPending} usage={initialCashUsage} />}
 
-      <MysticCard className="w-full px-5 py-4 text-sm text-cream-muted">
+      <MysticCard className="wheel-lite-card w-full px-5 py-4 text-sm text-cream-muted">
         <p className="mb-1 font-serif text-gold-light">รางวัลบนกงล้อ</p>
         <p className="leading-relaxed">
           โบนัสเหรียญ 20 · 40 · 120 · 400 เหรียญ สิทธิ์ดูดวงฟรี การ์ด +ความเฮง (กดใช้แล้วการันตีได้รางวัลทุกตาตลอด 3 รอบที่หมุนถัดไป + เพิ่มโอกาสได้ 400 เหรียญอีก 30% ใช้ได้เมื่อมีเหรียญพอหมุนหรือมีสิทธิ์หมุนฟรี) บางครั้งจะเข้าสู่ “มือขึ้น 5 ตาติด” (โอกาสได้เหรียญสูงขึ้นประมาณ 80% ต่อรอบ) และแจ็กพอตใหญ่ 5,000 เหรียญ (ผู้ได้รับแจ็กพอตสามารถแจ้งถอนเป็นเงิน 5,000 บาทได้)

@@ -119,12 +119,35 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  // while the page is being scrolled: pause every loop (CSS via html[data-scrolling]) and the rAF flame loop, resume 140 ms after the last scroll event
+  const scrolling = useRef(false);
+  useEffect(() => {
+    const html = document.documentElement;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      if (!scrolling.current) {
+        scrolling.current = true;
+        html.dataset.scrolling = "true";
+      }
+      clearTimeout(t);
+      t = setTimeout(() => {
+        scrolling.current = false;
+        delete html.dataset.scrolling;
+      }, 140);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      clearTimeout(t);
+      delete html.dataset.scrolling;
+    };
+  }, []);
   const fireA = useRef<SVGGElement>(null);
   const fireB = useRef<SVGGElement>(null);
   const angle = useRef(0);
   const speed = useRef(10);
   useAnimationFrame((_, delta) => {
-    if (reduce || (offscreen.current && !spinning)) return;
+    if (reduce || ((offscreen.current || scrolling.current) && !spinning)) return;
     const target = spinning ? 330 : 10; // degrees / second
     speed.current += (target - speed.current) * Math.min(1, (delta / 1000) * (spinning ? 2.2 : 1.2));
     angle.current = (angle.current + (speed.current * delta) / 1000) % 360;
@@ -135,23 +158,23 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
   // ── static decoration (computed once) ──────────────────────────────────
   const flamesA = useMemo(
     () =>
-      Array.from({ length: 24 }, (_, i) => {
+      Array.from({ length: 16 }, (_, i) => {
         const r = rng(i + 3);
-        return { a: i * 15, s: 0.95 + r() * 0.55, d: -r() * 1.2, dur: 0.55 + r() * 0.5 };
+        return { a: i * 22.5, s: 0.95 + r() * 0.55, d: -r() * 1.2, dur: 0.55 + r() * 0.5 };
       }),
     [],
   );
   const flamesB = useMemo(
     () =>
-      Array.from({ length: 34 }, (_, i) => {
+      Array.from({ length: 20 }, (_, i) => {
         const r = rng(i + 91);
-        return { a: i * (360 / 34) + 4, s: 0.55 + r() * 0.4, d: -r() * 1.2, dur: 0.4 + r() * 0.4 };
+        return { a: i * 18 + 4, s: 0.55 + r() * 0.4, d: -r() * 1.2, dur: 0.4 + r() * 0.4 };
       }),
     [],
   );
   const embers = useMemo(
     () =>
-      Array.from({ length: 26 }, (_, i) => {
+      Array.from({ length: 12 }, (_, i) => {
         const r = rng(i + 400);
         const p = polar(206 + r() * 24, r() * 360);
         return { x: p.x, y: p.y, r: 1 + r() * 2, d: -r() * 4, dur: 2.2 + r() * 2.6, big: r() > 0.7 };
