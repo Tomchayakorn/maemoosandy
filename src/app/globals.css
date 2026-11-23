@@ -550,6 +550,15 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
   --badge-bg: linear-gradient(120deg, #34186e, #7c3aed 50%, #d4af37);
   --badge-glow: rgb(168 110 255 / 0.55);
 }
+.home-badge-gold {
+  --badge-bg: linear-gradient(120deg, #fff1b8, #f3cf62 42%, #c9961f 78%, #8a5d0c);
+  --badge-glow: rgb(255 214 90 / 0.6);
+}
+.home-badge-gold .home-badge {
+  color: #3a2604;
+  text-shadow: 0 1px 0 rgb(255 248 214 / 0.7);
+  box-shadow: inset 0 0 0 1px rgb(255 248 214 / 0.85), inset 0 0 0 2px rgb(138 93 12 / 0.55);
+}
 .home-badge {
   position: relative;
   display: block;

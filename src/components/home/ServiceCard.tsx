@@ -14,7 +14,7 @@ type Props = {
   highlight?: boolean;
   /** Small glowing corner tag (top right). Only the cards that pass it get one. */
   badge?: string;
-  badgeTone?: "gold-red" | "violet";
+  badgeTone?: "gold-red" | "violet" | "gold";
 };
 
 /** Service menu card on the home page. */
@@ -44,7 +44,7 @@ export function ServiceCard({ href, title, description, price, icon, index, high
           className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-gold-light/10 to-transparent opacity-0 transition-all duration-700 group-hover:left-full group-hover:opacity-100"
         />
         {badge && (
-          <span className={"home-badge-wrap " + (badgeTone === "violet" ? "home-badge-violet" : "home-badge-hot")}>
+          <span className={"home-badge-wrap " + (badgeTone === "violet" ? "home-badge-violet" : badgeTone === "gold" ? "home-badge-gold" : "home-badge-hot")}>
             <span aria-hidden className="home-badge-glow" />
             <span className="home-badge">{badge}</span>
           </span>

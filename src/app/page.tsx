@@ -56,6 +56,8 @@ export default function Home() {
         <ServiceCard
           index={2}
           href="/lucky-wheel"
+          badge="🏆 แจ็กพอตใหญ่ ถอนได้"
+          badgeTone="gold"
           title="กงล้อมหาเฮง ลุ้นโชคเสริมดวง"
           description="หมุนลุ้นเหรียญโบนัสและสิทธิ์ดูดวงฟรี เช็กอินทุกวันรับสิทธิ์หมุนเพิ่ม"
           price="ฟรี / ใช้สิทธิ์หมุน"
@@ -64,6 +66,8 @@ export default function Home() {
         <ServiceCard
           index={3}
           href="/lucky-card"
+          badge="🃏 เทพประทาน แจ็กพอตจริง"
+          badgeTone="gold"
           title="ดวงดี มีเฮ เปิดไพ่ลุ้นโชค"
           description="เปิดไพ่ 1 ใบจาก 8 ใบ ลุ้น 108 ข้อความมงคล โบนัส 100 / 300 / 500 เหรียญ และรางวัลลับ “เทพประทานทรัพย์”"
           price={
