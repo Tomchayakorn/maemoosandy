@@ -12,6 +12,7 @@ import { JackpotBanner } from "@/components/withdraw/JackpotBanner";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getMyWallet } from "@/lib/wallet";
 import { smallTierUsage, type CashRequestRow } from "@/lib/wheel/cash";
+import { checkinStreak } from "@/lib/wheel/checkin-streak";
 
 export const metadata: Metadata = {
   title: "กงล้อมหาเฮง",
@@ -54,12 +55,14 @@ async function WheelGate() {
 
   const supabase = await createClient();
   const today = bangkokToday();
-  const [wallet, checkin, cashRows] = await Promise.all([
+  const [wallet, checkins, cashRows] = await Promise.all([
     getMyWallet(),
-    supabase.from("daily_checkins").select("checkin_date").eq("checkin_date", today).maybeSingle(),
+    // my recent check-in days (RLS: own rows only): today's state + the consecutive-day streak
+    supabase.from("daily_checkins").select("checkin_date").order("checkin_date", { ascending: false }).limit(400),
     // my wheel cash-out requests (RLS: own rows only): pending state + small-tier quota used today / this week
     supabase.from("withdrawal_requests").select("amount_thb, status, created_at").eq("source", "wheel_cash").order("created_at", { ascending: false }).limit(60),
   ]);
+  const { streak, checkedInToday } = checkinStreak((checkins.data ?? []).map((r) => r.checkin_date), today);
   const cash = (cashRows.data ?? []) as CashRequestRow[];
   const cashPending = cash.some((r) => r.status === "pending");
   const cashUsage = smallTierUsage(cash, new Date());
@@ -72,7 +75,8 @@ async function WheelGate() {
       <WheelExperience
       initialTickets={wallet?.spin_tickets ?? 0}
       initialBalance={wallet?.balance ?? 0}
-      initialCheckedIn={!!checkin.data}
+      initialCheckedIn={checkedInToday}
+      initialCheckinStreak={streak}
       initialFreeReadings={wallet?.free_reading_tickets ?? 0}
       initialLuckCards={wallet?.luck_cards ?? 0}
       initialLuckBuffRounds={wallet?.luck_buff_rounds ?? 0}

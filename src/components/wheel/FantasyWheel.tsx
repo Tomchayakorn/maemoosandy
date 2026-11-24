@@ -20,6 +20,8 @@ const C = 240;
 const R = 168; // disc radius
 const N = WHEEL_SEGMENTS.length;
 const STEP = 360 / N;
+/** When this few slices are left, the pointer lights up and its tick gets heavier (final-tick tension). */
+const FINAL_PEGS = 3;
 
 const round4 = (v: number) => Math.round(v * 1e4) / 1e4;
 const polar = (r: number, deg: number) => {
@@ -77,16 +79,28 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
     onCompleteRef.current = onComplete;
   });
 
-  // — spin
+  // pointer glow (opacity of a bright outline + halo on the crown pointer only): rises for the last FINAL_PEGS slices
+  const glow = useMotionValue(0);
+  const targetRef = useRef(0);
+  const inFinal = useRef(false);
+
+  // — spin. The curve is the same ease-out as before with a slightly longer, slower tail (the last slices crawl a little more);
+  //   total duration, landing slice and completion timing are unchanged.
   useEffect(() => {
     const spinDuration = Math.max(0.5, Math.min(seconds, 2.2));
+    targetRef.current = rotation;
+    inFinal.current = false;
+    glow.set(0);
     const controls = animate(disc, rotation, {
       duration: spinDuration,
-      ease: [0.14, 0.88, 0.24, 1],
-      onComplete: () => onCompleteRef.current(),
+      ease: [0.14, 0.88, 0.1, 1],
+      onComplete: () => {
+        animate(glow, 0, { duration: 0.7, delay: 0.5 }); // the glow lingers a moment on the landing
+        onCompleteRef.current();
+      },
     });
     return () => controls.stop();
-  }, [rotation, seconds, disc]);
+  }, [rotation, seconds, disc, glow]);
 
   // ── pointer ticks each time a peg passes the top ───────────────────────
   const lastPeg = useRef(0);
@@ -95,9 +109,15 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
     if (peg !== lastPeg.current) {
       lastPeg.current = peg;
       if (!reduce) {
-        pointer.set(-15);
-        animate(pointer, 0, { type: "spring", stiffness: 520, damping: 13 });
+        // in the final slices the tick is a little heavier and slower to settle
+        pointer.set(inFinal.current ? -21 : -15);
+        animate(pointer, 0, inFinal.current ? { type: "spring", stiffness: 380, damping: 12 } : { type: "spring", stiffness: 520, damping: 13 });
       }
+    }
+    const remaining = (targetRef.current - v) / STEP;
+    if (!reduce && !inFinal.current && remaining > 0.05 && remaining <= FINAL_PEGS) {
+      inFinal.current = true;
+      animate(glow, 1, { duration: 0.2 });
     }
   });
 
@@ -209,6 +229,10 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
           <stop offset="0.5" stopColor="#e2b43e" />
           <stop offset="1" stopColor="#7a560c" />
         </linearGradient>
+        <radialGradient id="fw-pointer-glow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0.25" stopColor="#fff8d0" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#ffd05c" stopOpacity="0" />
+        </radialGradient>
         <radialGradient id="fw-ruby" cx="0.35" cy="0.3" r="0.8">
           <stop offset="0" stopColor="#ffd9de" />
           <stop offset="0.45" stopColor="#e0243a" />
@@ -390,6 +414,16 @@ export function FantasyWheel({ rotation, seconds, spinning, onComplete, highligh
         <circle cx={C} cy={32} r={7.4} fill="url(#fw-ruby)" />
         <circle cx={C - 2.2} cy={29.5} r={1.9} fill="#fff" opacity="0.9" />
         <circle cx={C} cy={5} r={2.6} fill="#fff6c8" />
+        {/* final-tick emphasis: only these two elements fade in (opacity), no filter, no shadow */}
+        <motion.circle cx={C} cy={32} r={15} fill="url(#fw-pointer-glow)" style={{ opacity: glow }} />
+        <motion.path
+          d="M222 8 L228 21 L240 4 L252 21 L258 8 L257 38 Q241 52 240 76 Q239 52 223 38 Z"
+          fill="none"
+          stroke="#fff8d0"
+          strokeWidth={3}
+          strokeLinejoin="round"
+          style={{ opacity: glow }}
+        />
       </motion.g>
 
     </svg>

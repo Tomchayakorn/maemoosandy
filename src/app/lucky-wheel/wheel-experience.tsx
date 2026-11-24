@@ -16,6 +16,7 @@ import { walletBus } from "@/lib/wallet-bus";
 import { wheelSfx, type SweepDir, type WheelFx } from "@/lib/audio/wheelSfx";
 import { WheelCashPanel } from "@/components/wheel/WheelCashPanel";
 import { cashCredit, WHEEL_CASH_PCT } from "@/lib/wheel/cash";
+import { streakMessage } from "@/lib/wheel/checkin-streak";
 import { HOT_STREAK_ROUNDS } from "@/lib/wheel/hot-streak";
 import { BUFF_MULTIPLIER, BUFF_ROUNDS } from "@/lib/wheel/luck-card";
 import { WHEEL_SEGMENTS, type CheckinResponse, type SpinResponse } from "@/lib/wheel/segments";
@@ -32,6 +33,7 @@ export function WheelExperience({
   initialTickets,
   initialBalance,
   initialCheckedIn,
+  initialCheckinStreak = 0,
   initialFreeReadings,
   initialLuckCards = 0,
   initialLuckBuffRounds = 0,
@@ -43,6 +45,8 @@ export function WheelExperience({
   initialTickets: number;
   initialBalance: number;
   initialCheckedIn: boolean;
+  /** consecutive check-in days (Bangkok); counts back from today when already checked in, else from yesterday */
+  initialCheckinStreak?: number;
   initialFreeReadings: number;
   /** "การ์ด +ความเฮง" held / rounds left on its buff (from the wallet; 0 if migration 0010 isn't installed) */
   initialLuckCards?: number;
@@ -65,6 +69,7 @@ export function WheelExperience({
   const [wheelCash, setWheelCash] = useState<number | null>(initialWheelCash);
   const [hotRounds, setHotRounds] = useState(initialHotStreak);
   const [checkedIn, setCheckedIn] = useState(initialCheckedIn);
+  const [streak, setStreak] = useState(initialCheckinStreak);
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -306,6 +311,7 @@ export function WheelExperience({
       const res = body as CheckinResponse;
       setTickets(res.spinTickets);
       setCheckedIn(true);
+      setStreak((s) => s + 1); // today joins the run (it was counted up to yesterday while today was still open)
       setNotice(res.granted ? "เช็กอินสำเร็จ ได้สิทธิ์หมุนเพิ่ม 1 ครั้ง ✨" : "วันนี้เช็กอินไปแล้วค่ะ พรุ่งนี้มารับสิทธิ์ใหม่นะคะ");
       router.refresh();
     } catch {
@@ -442,6 +448,15 @@ export function WheelExperience({
             ✨ สิทธิ์ดูดวงฟรี {freeReadings} ครั้ง — ใช้ได้เลยที่หน้าดูดวง
           </Link>
         )}
+
+        {/* consecutive check-in days: display only, from the existing daily_checkins rows */}
+        <div data-testid="checkin-streak" className="flex w-full flex-col items-center gap-0.5 rounded-2xl border border-gold/30 bg-velvet/60 px-3 py-2 text-center">
+          <p className="text-sm text-cream">
+            {streak > 0 ? "🔥" : "📅"} เช็กอินต่อเนื่อง{" "}
+            <b data-testid="streak-days" className="font-tarot text-xl tabular-nums text-gold-light">{streak}</b> วัน
+          </p>
+          <p className="text-xs leading-relaxed text-cream-muted">{streakMessage(streak, checkedIn)}</p>
+        </div>
 
         <GoldButton variant="outline" className="w-full" onClick={checkin} disabled={checkedIn || checking || spinning}>
           {checkedIn ? "เช็กอินวันนี้แล้ว ✓" : checking ? "กำลังเช็กอิน..." : "เช็กอินรายวัน รับสิทธิ์หมุน +1"}
