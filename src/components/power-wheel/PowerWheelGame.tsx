@@ -191,17 +191,20 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
       {round === null && !unavailable && <Setup bet={bet} balance={balance} busy={busy} onBet={setBet} onStart={startRound} />}
 
       {round && active && (
-        <div className="flex flex-col gap-3 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-3.5 shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
-          <StatusBar level={level} bet={round.bet} payout={round.payout} currentBp={currentBp} nextBp={nextBp} nextPayout={nextBp !== null ? payoutFor(round.bet, level + 1) : null} safePct={safePct} />
+        <>
+          {/* the two actions sit right under the wheel, in thumb reach and above the stats card (so they stay clear of the floating LINE button) */}
           <div className="flex flex-col gap-2.5">
             <GoldButton onClick={spin} disabled={busy} size="lg" className="h-14 w-full text-lg" data-testid="climb-spin">
               {spinning ? "กำลังหมุน…" : busy ? "กำลังดำเนินการ…" : `🎡 หมุนไต่ชั้นถัดไป (ชั้น ${nextLevel})`}
             </GoldButton>
-            <GoldButton variant="outline" onClick={stop} disabled={busy || level < 1} size="lg" className="h-14 w-full border-2 text-base" data-testid="climb-stop">
+            <GoldButton variant="outline" onClick={stop} disabled={busy || level < 1} size="lg" className="h-12 w-full border-2 text-base" data-testid="climb-stop">
               {level < 1 ? "ผ่านอย่างน้อย 1 ชั้นก่อน จึงรับเหรียญได้" : `💰 รับเหรียญขั้นนี้ +${formatCoins(round.payout)}`}
             </GoldButton>
           </div>
-        </div>
+          <div className="flex flex-col gap-3 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-3.5 shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
+            <StatusBar level={level} bet={round.bet} payout={round.payout} currentBp={currentBp} nextBp={nextBp} nextPayout={nextBp !== null ? payoutFor(round.bet, level + 1) : null} safePct={safePct} />
+          </div>
+        </>
       )}
 
       {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); setRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
