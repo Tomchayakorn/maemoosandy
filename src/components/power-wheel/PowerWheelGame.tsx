@@ -306,8 +306,9 @@ function Setup({ bet, balance, busy, onBet, onStart }: { bet: number; balance: n
     "flex h-12 min-w-[4rem] flex-1 items-center justify-center rounded-xl border text-sm transition " +
     (on ? "border-gold-light bg-gold/20 text-gold-light" : "border-gold/40 text-cream hover:border-gold-light");
   const enough = balance >= bet;
+  // order matters on a phone: bet → START button (right under the wheel, in thumb reach, above the floating LINE button) → the long explanation
   return (
-    <div className="flex flex-col gap-4 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-4 text-left shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
+    <div className="flex flex-col gap-3 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-4 text-left shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
       <div>
         <p className="mb-2 text-sm text-cream">เลือกเดิมพัน (เหรียญ)</p>
         <div className="flex gap-2" role="radiogroup" aria-label="เดิมพัน">
@@ -318,11 +319,8 @@ function Setup({ bet, balance, busy, onBet, onStart }: { bet: number; balance: n
           ))}
         </div>
       </div>
-      <p className="rounded-xl border border-gold/20 bg-midnight/60 p-3 text-xs leading-relaxed text-cream-muted">
-        หมุนวงล้อทีละชั้น ช่อง ✨ คือผ่านชั้นและพลังสะสมเพิ่ม ช่อง 💀 คือจบรอบและเสียเดิมพัน ยิ่งชั้นสูง ช่อง 💀 ยิ่งมาก กดหยุดรับเหรียญได้ทุกเมื่อหลังผ่านอย่างน้อย 1 ชั้น รางวัลสะสมเข้ากระเป๋าเหรียญและใช้ในระบบเท่านั้น
-      </p>
       {enough ? (
-        <GoldButton onClick={onStart} disabled={busy} className="w-full" data-testid="climb-start">
+        <GoldButton onClick={onStart} disabled={busy} size="lg" className="h-14 w-full text-lg" data-testid="climb-start">
           {busy ? "กำลังเริ่มรอบ…" : `เริ่มไต่ชั้น (หัก ${formatCoins(bet)} เหรียญ)`}
         </GoldButton>
       ) : (
@@ -331,6 +329,9 @@ function Setup({ bet, balance, busy, onBet, onStart }: { bet: number; balance: n
           <Link href="/topup" className={goldButtonClass({ className: "w-full" })}>เติมเหรียญเลย</Link>
         </div>
       )}
+      <p className="rounded-xl border border-gold/20 bg-midnight/60 p-3 text-xs leading-relaxed text-cream-muted">
+        หมุนวงล้อทีละชั้น ช่อง ✨ คือผ่านชั้นและพลังสะสมเพิ่ม ช่อง 💀 คือจบรอบและเสียเดิมพัน ยิ่งชั้นสูง ช่อง 💀 ยิ่งมาก กดหยุดรับเหรียญได้ทุกเมื่อหลังผ่านอย่างน้อย 1 ชั้น รางวัลสะสมเข้ากระเป๋าเหรียญและใช้ในระบบเท่านั้น
+      </p>
     </div>
   );
 }
