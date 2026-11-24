@@ -31,6 +31,16 @@ type Phase =
   | { name: "loading"; index: number }
   | { name: "result"; index: number; outcome: LuckyCardOutcome };
 
+/** Themed lines shown before the player picks a card (ritual flavour only: the pick does not change the draw, and the footnote says so). */
+const PICK_TEASERS = [
+  "ตั้งจิตให้นิ่ง นึกถึงสิ่งที่อยากได้ แล้วเลือกใบที่ใจเรียก ✨",
+  "หลับตาสูดหายใจลึกๆ ใบไหนวาบขึ้นมาในใจ ใบนั้นแหละค่ะ",
+  "พลังฤกษ์ดีวันนี้ส่งมาถึงคุณแล้ว ลองเลือกตามสัญชาตญาณดูนะคะ",
+  "ไพ่ทุกใบมีพลังมงคลรออยู่ ให้ใจเป็นผู้เลือก ไม่ต้องคิดมากค่ะ",
+  "ขอพรในใจ 1 ข้อ แล้วแตะไพ่ใบที่รู้สึกอุ่นที่สุด",
+  "ใบที่ตาไปหยุดก่อนใคร อาจเป็นใบที่เทพเลือกให้คุณ",
+] as const;
+
 export function LuckyCardGame({
   initialBalance,
   initialBonusTotal = 0,
@@ -48,6 +58,7 @@ export function LuckyCardGame({
   const router = useRouter();
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<Phase>({ name: "pick" });
+  const [roundsPlayed, setRoundsPlayed] = useState(0); // picks the teaser line (deterministic: same on server and client)
   const [balance, setBalance] = useState(initialBalance);
   const [error, setError] = useState<string | null>(null);
   const [bonusTotal, setBonusTotal] = useState(initialBonusTotal);
@@ -121,6 +132,7 @@ export function LuckyCardGame({
   }
 
   function again() {
+    setRoundsPlayed((n) => n + 1);
     setPhase({ name: "pick" });
   }
 
@@ -131,6 +143,13 @@ export function LuckyCardGame({
         <b className="text-gold-light">{formatCoins(balance)}</b> เหรียญ
       </p>
       <GuaranteeCountdown guarantee={guarantee} />
+
+      {phase.name === "pick" && !notEnough && (
+        <div data-testid="pick-teaser" className="flex flex-col items-center gap-0.5 px-2">
+          <p className="font-serif text-base leading-relaxed text-gold-light">{PICK_TEASERS[roundsPlayed % PICK_TEASERS.length]}</p>
+          <p className="text-[11px] text-cream-muted">ผลรางวัลสุ่มโดยระบบ ไม่ว่าจะเลือกไพ่ใบไหน</p>
+        </div>
+      )}
 
       {phase.name !== "result" && (
         <div className="grid grid-cols-4 gap-2.5 [perspective:900px]">
@@ -146,7 +165,8 @@ export function LuckyCardGame({
                 disabled={notEnough || phase.name === "loading"}
                 onClick={() => pick(i)}
                 aria-label={`เปิดไพ่ใบที่ ${i + 1}`}
-                animate={reduce ? undefined : { rotateY: flipped ? 180 : 0 }}
+                // once a card is picked, the other cards dim so the chosen one stands out (they hold no prize of their own: one draw per round)
+                animate={reduce ? undefined : { rotateY: flipped ? 180 : 0, opacity: phase.name === "loading" && !flipped ? 0.35 : 1 }}
                 whileTap={reduce ? undefined : { scale: 0.93 }}
                 transition={{ duration: 0.25 }}
                 // card follows the artwork's own ratio (1536×2752) so `cover` shows the whole frame, uncropped
