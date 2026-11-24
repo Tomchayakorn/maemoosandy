@@ -7,7 +7,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
-import { BETS, dangerCount, dangerSlices, MAX_LEVEL, MAX_PAYOUT, multiplierBp, payoutFor, SLICES } from "@/lib/power-wheel/config";
+import { BETS, dangerCount, dangerSlices, MAX_LEVEL, MAX_PAYOUT, multiplierBp, payoutFor, reachesCap, SLICES } from "@/lib/power-wheel/config";
 import type { PowerRoundView } from "@/lib/power-wheel/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
@@ -124,7 +124,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     const current = ((rotRef.current % 360) + 360) % 360;
     const degrees = (reduce ? 0 : 3) * 360 + ((target - current + 360) % 360);
     rotRef.current += degrees;
-    powerSfx.spin(seconds, degrees / (360 / SLICES)); // ticks follow the wheel's slowing down; one tick per peg passed
+    powerSfx.spin(seconds, degrees / (360 / SLICES), level + 1); // ticks follow the wheel's slowing down; one tick per peg passed
     setSpinning(true);
     setRotation(rotRef.current);
     await sleep(seconds * 1000 + 150);
@@ -133,7 +133,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     setGlow(view.failed ? "lose" : "win");
     // the wheel has stopped: a different sound for falling, for an automatic payout and for clearing a level
     if (view.failed) powerSfx.fail();
-    else if (view.status !== "active") powerSfx.reward(rewardTier(view.payout, view.bet, view.auto));
+    else if (view.status !== "active") powerSfx.reward(rewardTier(view.payout, view.bet, view.auto), view.level);
     else powerSfx.climb(view.level);
     if (!view.failed && !reduce) goldSparkleAt(document.querySelector("[data-testid=climb-wheel]"));
     if (view.status !== "active") finished(view);
@@ -149,7 +149,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     powerSfx.prime();
     const view = await post("/api/power-wheel/stop", { roundId: round.roundId });
     if (view) {
-      powerSfx.reward(rewardTier(view.payout, view.bet, view.auto)); // coins taken
+      powerSfx.reward(rewardTier(view.payout, view.bet, view.auto), view.level); // coins taken
       setRound(view);
       finished(view);
     }
@@ -250,13 +250,33 @@ function StatusBar({
         ))}
       </div>
       <p className="text-xs text-cream-muted">
-        เดิมพัน <b className="text-cream">{formatCoins(bet)}</b>
-        {nextBp !== null && safePct !== null && (
-          <>
-            {" "}· ชั้นถัดไปปลอดภัย <b className="text-cream">{safePct}%</b> → <b className="text-purple-100">{x(nextBp)}</b> (≈ {formatCoins(nextPayout ?? 0)} เหรียญ)
-          </>
-        )}
+        เดิมพัน <b className="text-cream">{formatCoins(bet)}</b> · ชั้นถัดไปปลอดภัย <b className="text-cream">{safePct ?? 0}%</b>
+        {nextBp !== null && <> · ตัวคูณ <b className="text-purple-100">{x(nextBp)}</b></>}
       </p>
+      {/* the next target and the distance to the payout cap (numbers from the same multiplier table and cap the server uses) */}
+      {nextPayout !== null && (
+        <div data-testid="next-target" className="grid grid-cols-2 gap-2 text-left text-xs leading-snug">
+          <div className="rounded-xl border border-purple-300/40 bg-purple-500/5 px-2 py-1">
+            <p className="text-purple-200">🎯 ถ้าผ่านชั้นถัดไป</p>
+            <p className="text-cream">
+              ไปที่ <b data-testid="next-payout" className="font-tarot text-sm">{formatCoins(nextPayout)}</b>
+              <span className="text-emerald-300"> (+{formatCoins(Math.max(0, nextPayout - payout))})</span>
+            </p>
+          </div>
+          <div className="rounded-xl border border-gold/40 bg-gold/5 px-2 py-1">
+            <p className="text-gold-light">🏁 เพดาน {formatCoins(MAX_PAYOUT)}</p>
+            <p className="text-cream" data-testid="cap-left">
+              {reachesCap(bet, level + 1) ? (
+                <>ชั้นหน้าถึงเพดาน จบรอบ จ่ายเอง</>
+              ) : (
+                <>
+                  อีก <b className="font-tarot text-sm">{formatCoins(Math.max(0, MAX_PAYOUT - payout))}</b> เหรียญ
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

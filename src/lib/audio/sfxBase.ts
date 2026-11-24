@@ -73,8 +73,8 @@ export abstract class SfxBase {
     bgm.setDucked(this.duckKey, false);
   }
 
-  /** A prize shows (a safe chest, or coins taken): coins + chimes, grander for a bigger tier. */
-  protected coinReward(tier: RewardTier) {
+  /** A prize shows (a safe chest, or coins taken): coins + chimes, grander for a bigger tier. `pitch` multiplies the clink and chime frequencies (1 = normal). */
+  protected coinReward(tier: RewardTier, pitch = 1) {
     const a = this.begin();
     if (!a) return;
     const { ctx, out } = a;
@@ -91,7 +91,7 @@ export abstract class SfxBase {
     for (let k = 0; k < plan.clinks; k++) {
       const at = t + 0.03 + Math.pow(Math.random(), 1.4) * plan.span;
       const fade = 1 - ((at - t) / (plan.span + 0.2)) * 0.5;
-      const f = 1900 + Math.random() * 1500;
+      const f = (1900 + Math.random() * 1500) * pitch;
       const pan = (Math.random() * 2 - 1) * 0.7;
       const life = 0.13 + Math.random() * 0.14;
       this.tone(ctx, out, f, at, life, { gain: 0.11 * fade, pan });
@@ -99,7 +99,7 @@ export abstract class SfxBase {
       this.tone(ctx, out, f * 5.4, at, life * 0.4, { gain: 0.025 * fade, pan });
     }
     // bright chime arpeggio (rising)
-    plan.chimes.forEach((f, i) => this.bell(ctx, out, f, t + 0.08 + i * 0.085, 0.55, 0.07, ((i % 3) - 1) * 0.3));
+    plan.chimes.forEach((f, i) => this.bell(ctx, out, f * pitch, t + 0.08 + i * 0.085, 0.55, 0.07, ((i % 3) - 1) * 0.3));
     // warm major chord underneath for the grand tiers (C4 E4 G4, +C5 for the top tier)
     if (plan.pad) [261.6, 329.6, 392, ...(tier === "jackpot" ? [523.3] : [])].forEach((f) => this.pad(ctx, out, f, t + 0.12, plan.len - 0.3, 0.05));
     if (plan.shimmer) this.burst(ctx, out, t + 0.1, 0.9, { f: 6200, gain: 0.03, slow: true });

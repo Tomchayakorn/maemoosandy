@@ -2,15 +2,18 @@
 
 import { SfxBase } from "./sfxBase";
 import type { RewardTier } from "@/lib/mystic/sfx-tier";
+import { pitchFor } from "@/lib/power-wheel/sfx-pitch";
 
 /**
  * Synthesised sound effects for วงล้อไต่ชั้น (Web Audio only — no audio files).
  *
  *   start()          — a round begins (bet confirmed): a coin dropped on velvet + a short rising two-note chime (~0.45 s)
- *   spin(secs, pegs) — wheel ticks that follow the wheel's real slowing down (fast → slow, pitch easing lower) over a soft whoosh.
+ *   spin(secs, pegs, level) — wheel ticks that follow the wheel's real slowing down (fast → slow, pitch easing lower) over a soft whoosh;
+ *                      the whole tick pitch sits a little higher on a higher level (pitchFor).
  *                      All ticks are scheduled up-front on the audio clock, so no JS timers run during the animation (no jank).
  *   climb(level)     — a level was cleared: coin clink + a bright chime whose pitch rises with the level (up to an octave)
- *   reward(tier)     — coins taken / paid out automatically: gold coin clinks + chimes, grander for a bigger prize (same tiers as เปิดหีบมนตรา)
+ *   reward(tier, level) — coins taken / paid out automatically: gold coin clinks + chimes, grander for a bigger prize (same tiers as เปิดหีบมนตรา),
+ *                      pitched a little higher for a higher level
  *   fail()           — fell on a danger slice: a low thud, two sinking minor notes and a dull crumble — clearly unlike any win
  *
  * Mute rule (header music toggle), music ducking, level limiting and cleanup live in SfxBase. Every call is a no-op when muted.
@@ -38,7 +41,7 @@ class PowerSfx extends SfxBase {
   }
 
   /** The wheel spins for `seconds` and passes about `pegs` pegs; the ticks slow down like the wheel does. */
-  spin(seconds: number, pegs: number) {
+  spin(seconds: number, pegs: number, level = 0) {
     this.stop(); // cut a previous effect (new spin / new round)
     const a = this.begin();
     if (!a) return;
@@ -46,10 +49,11 @@ class PowerSfx extends SfxBase {
     const T = Math.max(0.3, seconds);
     const n = Math.min(40, Math.max(3, Math.round(pegs)));
     const t0 = ctx.currentTime + 0.02;
+    const pitch = pitchFor(level); // a little higher on a higher level
     for (let k = 1; k <= n; k++) {
       const p = k / n;
       const at = t0 + T * (1 - Math.pow(1 - p, 1 / 3)); // wheel position follows an ease-out curve: pegs come fast first, then slower
-      const f = 1500 - 520 * p; // pitch eases lower as the wheel slows
+      const f = (1500 - 520 * p) * pitch; // pitch eases lower as the wheel slows (and sits a bit higher on higher levels)
       const gain = 0.07 + 0.05 * p; // the last ticks are a little firmer
       this.tone(ctx, out, f, at, 0.04, { type: "triangle", gain, attack: 0.002, pan: (k % 2 ? -1 : 1) * 0.12 });
       this.burst(ctx, out, at, 0.012, { f: 3200, gain: 0.05 });
@@ -75,8 +79,8 @@ class PowerSfx extends SfxBase {
   }
 
   /** Coins taken, or the round paid out by itself. */
-  reward(tier: RewardTier) {
-    this.coinReward(tier);
+  reward(tier: RewardTier, level = 0) {
+    this.coinReward(tier, pitchFor(level));
   }
 
   /** Fell on a danger slice: the round is over. */
