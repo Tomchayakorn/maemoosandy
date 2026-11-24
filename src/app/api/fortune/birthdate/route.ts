@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
@@ -5,7 +6,9 @@ import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { generateReading, isAiConfigured } from "@/lib/ai/engine";
 import { MAE_MU_SANDY_SYSTEM } from "@/lib/ai/persona";
 import { computeBirthProfile, FOCUS_LABEL } from "@/lib/astrology/profile";
+import { thaiNow } from "@/lib/astrology/now-th";
 import { buildBirthdatePrompt } from "@/lib/astrology/prompt";
+import { pickVariety } from "@/lib/astrology/variety";
 import { FORTUNE_PRICES } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BirthdateResponse } from "@/lib/astrology/types";
@@ -51,7 +54,9 @@ export async function POST(request: Request) {
   if (!body) return invalid;
 
   // All astrology is computed here on the server — the client only sends raw inputs.
-  const computed = computeBirthProfile({ ...body, birthTime: body.birthTime ?? null });
+  // The moment of the reading comes from the SERVER clock (never from the client), so it can't be spoofed and is always "now".
+  const asOfDate = new Date();
+  const computed = computeBirthProfile({ ...body, birthTime: body.birthTime ?? null }, asOfDate);
   if (!computed.ok) return apiError(400, "INVALID_BIRTHDATE", computed.error);
   const profile = computed.profile;
 
@@ -71,7 +76,11 @@ export async function POST(request: Request) {
   // 2) Ask Mae Mu Sandy.
   let reading: string;
   try {
-    reading = await generateReading({ system: MAE_MU_SANDY_SYSTEM, prompt: buildBirthdatePrompt(profile) });
+    // fresh every time: the current Thai date/time + the day's position on this person's ทักษา wheel + a random opening/lens (crypto)
+    reading = await generateReading({
+      system: MAE_MU_SANDY_SYSTEM,
+      prompt: buildBirthdatePrompt(profile, { now: asOfDate, variety: pickVariety((n) => randomInt(n)) }),
+    });
   } catch (err) {
     console.error("birthdate: AI generation failed", err);
     const refund = await admin.rpc("refund_coins", { p_ledger_id: ledgerId });
@@ -110,5 +119,6 @@ export async function POST(request: Request) {
     balance: wallet?.balance ?? 0,
     freeReadingTickets: wallet?.free_reading_tickets ?? 0,
     usedFreeTicket: body.useFreeTicket,
-  });
+    asOf: thaiNow(asOfDate).label,
+  }, { headers: { "Cache-Control": "no-store" } }); // a reading belongs to its moment: never cached by the browser or a proxy
 }

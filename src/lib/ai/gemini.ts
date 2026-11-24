@@ -47,7 +47,7 @@ export async function generateReadingGemini({ system, prompt }: { system: string
       const response = await getClient().models.generateContent({
         model,
         contents: prompt,
-        config: { systemInstruction: system, temperature: 0.9, maxOutputTokens: 4096 },
+        config: { systemInstruction: system, temperature: 0.9, maxOutputTokens: 6144 },
       });
       const text = response.text?.trim();
       if (!text) throw new Error(`${model} returned an empty response`);

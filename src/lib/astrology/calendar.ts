@@ -46,7 +46,8 @@ export function parseBirthDate(
   if (day < 1 || day > daysInMonth(yearCE, month)) return { ok: false, error: "วันที่นี้ไม่มีอยู่จริงในเดือนนั้นค่ะ" };
 
   const birth = Date.UTC(yearCE, month - 1, day);
-  const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const bkk = new Date(today.getTime() + 7 * 3_600_000); // today's date in Thailand (UTC+7), not the server's
+  const now = Date.UTC(bkk.getUTCFullYear(), bkk.getUTCMonth(), bkk.getUTCDate());
   if (birth > now) return { ok: false, error: "วันเกิดต้องไม่อยู่ในอนาคตค่ะ" };
 
   return { ok: true, date: { year: yearCE, month, day } };
@@ -56,10 +57,13 @@ export function formatThaiDate(d: CEDate): string {
   return `${d.day} ${THAI_MONTHS[d.month - 1]} พ.ศ. ${toBE(d.year)}`;
 }
 
-/** Whole years of age on `today`. */
+/** Whole years of age on `today`, by the calendar date in Thailand (a server in UTC would read the date 7 hours late, i.e. yesterday between midnight and 07:00). */
 export function ageOn(d: CEDate, today: Date = new Date()): number {
-  let age = today.getFullYear() - d.year;
-  const beforeBirthday = today.getMonth() + 1 < d.month || (today.getMonth() + 1 === d.month && today.getDate() < d.day);
-  if (beforeBirthday) age -= 1;
+  const t = new Date(today.getTime() + 7 * 3_600_000); // Asia/Bangkok = UTC+7, no DST
+  const year = t.getUTCFullYear();
+  const month = t.getUTCMonth() + 1;
+  const day = t.getUTCDate();
+  let age = year - d.year;
+  if (month < d.month || (month === d.month && day < d.day)) age -= 1;
   return age;
 }

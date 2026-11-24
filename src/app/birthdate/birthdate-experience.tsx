@@ -361,6 +361,12 @@ export function BirthdateExperience({
                 เกิด{result.profile.birthDay.th} · {result.profile.birthDateTh}
                 <br />
                 เน้นเรื่อง{FOCUS_LABEL[result.profile.focus]}
+                {result.asOf && (
+                  <>
+                    <br />
+                    <span data-testid="as-of">ตรวจตามเวลา {result.asOf}</span>
+                  </>
+                )}
               </>
             }
             header={<BirthProfileSummary profile={result.profile} />}
