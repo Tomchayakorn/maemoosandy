@@ -19,7 +19,8 @@ export async function GET() {
     if (limited) return limited;
     const s = await loadPowerState(user.id);
     if (s.unavailable) return apiError(503, "DB_MIGRATION_MISSING", "ระบบเกมยังตั้งค่าฐานข้อมูลไม่ครบ กรุณาแจ้งผู้ดูแล");
-    return NextResponse.json<PowerStateResponse>({ round: s.round, balance: s.balance });
+    // never cached by the browser or a proxy: this is the truth the screen is reconciled with
+    return NextResponse.json<PowerStateResponse>({ round: s.round, balance: s.balance }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("power-wheel state failed", e);
     await alertAdminError({ where: "GET /api/power-wheel/state (exception)", error: e });

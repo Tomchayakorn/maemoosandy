@@ -13,6 +13,7 @@ import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
 import { powerSfx } from "@/lib/audio/powerSfx";
 import { rewardTier } from "@/lib/mystic/sfx-tier";
+import { reconcileRound } from "@/lib/power-wheel/reconcile";
 import { ClimbWheel } from "./ClimbWheel";
 
 type ApiError = { error?: { message?: string } };
@@ -39,6 +40,8 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
   const [glow, setGlow] = useState<"idle" | "win" | "lose">("idle");
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false); // synchronous guard: state lags one render behind a fast double tap
+  const roundRef = useRef<PowerRoundView | null>(initialRound); // the round currently shown (read by async code that would otherwise see an old closure)
+  const mutationSeq = useRef(0); // bumped by every start / spin / stop: a state read that began before one of them is out of date
   const rotRef = useRef(0);
   const seconds = reduce ? 0.3 : SPIN_SECONDS;
 
@@ -51,13 +54,28 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
   useEffect(() => () => walletBus.release(balanceRef.current), []);
   useEffect(() => () => powerSfx.stop(), []); // leaving the page: cut any sound and release the music ducking
 
-  /** Replace the local round and balance with what the server has (after an error or a lost answer). Never throws. */
-  async function resync() {
+  /** Show a round and remember it for async code. */
+  function showRound(next: PowerRoundView | null) {
+    roundRef.current = next;
+    setRound(next);
+  }
+
+  /**
+   * Take the server's truth (after an error or a lost answer, when the page comes back from the browser's cache, when the tab returns).
+   * An answer is dropped when it is out of date: a start / spin / stop began after the read did, or (unless `afterFailure`, i.e. we are
+   * inside the failed action itself) one is still running, or it describes the same round at an earlier level (see reconcileRound).
+   * Never throws.
+   */
+  async function resync(afterFailure = false) {
+    const seq = mutationSeq.current;
     try {
       const res = await fetch("/api/power-wheel/state", { cache: "no-store" });
       if (!res.ok) return;
       const s = (await res.json()) as { round: PowerRoundView | null; balance: number };
-      setRound(s.round);
+      if (mutationSeq.current !== seq || (!afterFailure && inFlight.current)) return; // overtaken by a newer action
+      const out = reconcileRound(roundRef.current, s.round);
+      if (!out.accepted) return; // an old answer: keep what the screen shows
+      showRound(out.round);
       setBalance(s.balance);
       walletBus.set(s.balance);
     } catch {
@@ -65,19 +83,39 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     }
   }
 
+  // The screen starts from the props of a server render, which can be old (the page restored from the back/forward cache, or a render
+  // that finished late). Read the real round once on mount and again whenever the page / tab comes back to the foreground.
+  useEffect(() => {
+    void resync();
+    const back = (e: PageTransitionEvent) => {
+      if (e.persisted && !inFlight.current) void resync();
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible" && !inFlight.current) void resync();
+    };
+    window.addEventListener("pageshow", back);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("pageshow", back);
+      document.removeEventListener("visibilitychange", visible);
+    };
+    // resync only reads refs and stable setters: run once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function post(url: string, body: object): Promise<PowerRoundView | null> {
     try {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = (await res.json().catch(() => null)) as (PowerRoundView & ApiError) | null;
       if (!res.ok || !json || !("roundId" in json)) {
         setError(json?.error?.message ?? "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้งนะคะ");
-        await resync(); // take the server's truth (e.g. the round already finished in another tab)
+        await resync(true); // take the server's truth (e.g. the round already finished in another tab)
         return null;
       }
       return json;
     } catch {
       setError("เชื่อมต่อไม่ได้ กรุณาลองใหม่อีกครั้งค่ะ");
-      await resync(); // the server may have processed it although the answer was lost
+      await resync(true); // the server may have processed it although the answer was lost
       return null;
     }
   }
@@ -91,13 +129,14 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     if (unavailable || inFlight.current || balance < bet) return;
     powerSfx.prime(); // unlock audio inside this tap
     inFlight.current = true;
+    mutationSeq.current++;
     setBusy(true);
     setError(null);
     setGlow("idle");
     const view = await post("/api/power-wheel/start", { bet });
     if (view) {
       powerSfx.start(); // the bet was taken, the round begins
-      setRound(view);
+      showRound(view);
       applyBalance(view);
       router.refresh();
     }
@@ -109,6 +148,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     if (!round || !active || inFlight.current) return;
     powerSfx.prime(); // unlock audio inside this tap
     inFlight.current = true;
+    mutationSeq.current++;
     setBusy(true);
     setError(null);
     setGlow("idle");
@@ -129,7 +169,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     setRotation(rotRef.current);
     await sleep(seconds * 1000 + 150);
     setSpinning(false);
-    setRound(view);
+    showRound(view);
     setGlow(view.failed ? "lose" : "win");
     // the wheel has stopped: a different sound for falling, for an automatic payout and for clearing a level
     if (view.failed) powerSfx.fail();
@@ -144,13 +184,14 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
   async function stop() {
     if (!round || !active || round.level < 1 || inFlight.current) return;
     inFlight.current = true;
+    mutationSeq.current++;
     setBusy(true);
     setError(null);
     powerSfx.prime();
     const view = await post("/api/power-wheel/stop", { roundId: round.roundId });
     if (view) {
       powerSfx.reward(rewardTier(view.payout, view.bet, view.auto), view.level); // coins taken
-      setRound(view);
+      showRound(view);
       finished(view);
     }
     inFlight.current = false;
@@ -207,7 +248,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
         </>
       )}
 
-      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); setRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
+      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); showRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
 
       {error && <p role="alert" className="rounded-xl border border-rose-400/40 bg-velvet/80 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
