@@ -11,6 +11,8 @@ import { BETS, dangerCount, dangerSlices, MAX_LEVEL, MAX_PAYOUT, multiplierBp, p
 import type { PowerRoundView } from "@/lib/power-wheel/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
+import { powerSfx } from "@/lib/audio/powerSfx";
+import { rewardTier } from "@/lib/mystic/sfx-tier";
 import { ClimbWheel } from "./ClimbWheel";
 
 type ApiError = { error?: { message?: string } };
@@ -47,6 +49,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     balanceRef.current = balance;
   }, [balance]);
   useEffect(() => () => walletBus.release(balanceRef.current), []);
+  useEffect(() => () => powerSfx.stop(), []); // leaving the page: cut any sound and release the music ducking
 
   /** Replace the local round and balance with what the server has (after an error or a lost answer). Never throws. */
   async function resync() {
@@ -86,12 +89,14 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
 
   async function startRound() {
     if (unavailable || inFlight.current || balance < bet) return;
+    powerSfx.prime(); // unlock audio inside this tap
     inFlight.current = true;
     setBusy(true);
     setError(null);
     setGlow("idle");
     const view = await post("/api/power-wheel/start", { bet });
     if (view) {
+      powerSfx.start(); // the bet was taken, the round begins
       setRound(view);
       applyBalance(view);
       router.refresh();
@@ -102,6 +107,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
 
   async function spin() {
     if (!round || !active || inFlight.current) return;
+    powerSfx.prime(); // unlock audio inside this tap
     inFlight.current = true;
     setBusy(true);
     setError(null);
@@ -116,13 +122,19 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     const slice = view.slice ?? 0;
     const target = (360 - slice * (360 / SLICES) + jitter() + 720) % 360;
     const current = ((rotRef.current % 360) + 360) % 360;
-    rotRef.current += (reduce ? 0 : 3) * 360 + ((target - current + 360) % 360);
+    const degrees = (reduce ? 0 : 3) * 360 + ((target - current + 360) % 360);
+    rotRef.current += degrees;
+    powerSfx.spin(seconds, degrees / (360 / SLICES)); // ticks follow the wheel's slowing down; one tick per peg passed
     setSpinning(true);
     setRotation(rotRef.current);
     await sleep(seconds * 1000 + 150);
     setSpinning(false);
     setRound(view);
     setGlow(view.failed ? "lose" : "win");
+    // the wheel has stopped: a different sound for falling, for an automatic payout and for clearing a level
+    if (view.failed) powerSfx.fail();
+    else if (view.status !== "active") powerSfx.reward(rewardTier(view.payout, view.bet, view.auto));
+    else powerSfx.climb(view.level);
     if (!view.failed && !reduce) goldSparkleAt(document.querySelector("[data-testid=climb-wheel]"));
     if (view.status !== "active") finished(view);
     inFlight.current = false;
@@ -134,8 +146,10 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     inFlight.current = true;
     setBusy(true);
     setError(null);
+    powerSfx.prime();
     const view = await post("/api/power-wheel/stop", { roundId: round.roundId });
     if (view) {
+      powerSfx.reward(rewardTier(view.payout, view.bet, view.auto)); // coins taken
       setRound(view);
       finished(view);
     }
@@ -190,7 +204,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
         </div>
       )}
 
-      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { setRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
+      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); setRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
 
       {error && <p role="alert" className="rounded-xl border border-rose-400/40 bg-velvet/80 px-3 py-2 text-sm text-rose-300">{error}</p>}
 

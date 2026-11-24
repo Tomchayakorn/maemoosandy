@@ -6,7 +6,7 @@ export type RewardTier = "small" | "good" | "big" | "jackpot";
  * @param bet    the bet of the round
  * @param auto   set when the round paid out by itself (all safe chests opened, or the payout cap reached) → the grandest effect
  */
-export function rewardTier(payout: number, bet: number, auto: "all_open" | "cap" | null | undefined): RewardTier {
+export function rewardTier(payout: number, bet: number, auto: string | null | undefined): RewardTier {
   if (auto) return "jackpot";
   if (bet <= 0) return "small";
   const ratio = payout / bet;
