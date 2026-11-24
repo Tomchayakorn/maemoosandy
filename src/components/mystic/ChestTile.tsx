@@ -20,7 +20,8 @@ const SPARKLES = [
 
 /**
  * One chest of เปิดหีบมนตรา. Presentation only: what a chest holds is decided by the server (mystic_open) and arrives as `kind`.
- *  - closed:      still of the golden chest, hover / tap feedback, a pulsing ✦ while the server opens it
+ *  - closed:      still of the golden chest, hover / tap feedback; while it is being opened the lid is "ajar": a slit of golden light
+ *                 grows across the middle and a soft glow rises (the same for a safe and a cursed chest, so it never hints at the result)
  *  - gem:         the lucky gem pops in (spring), glows behind, floats gently, twinkles; `badge` shows the multiplier and coins on the last opened chest
  *  - curse-hit:   the curse seal pops in, shakes once, violet-red warning light
  *  - curse-faint: a cursed chest revealed after the round, shown faintly
@@ -74,9 +75,25 @@ export function ChestTile({
           <Image src={CHEST_SRC} alt="" fill sizes="(max-width: 448px) 30vw, 140px" quality={75} draggable={false} className="object-cover" />
           <span aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,transparent_40%,rgb(11_10_18/0.55))]" />
           {loading && (
-            <span aria-hidden className="absolute inset-0 flex animate-pulse items-center justify-center bg-velvet/40 text-3xl text-gold">
-              ✦
-            </span>
+            <>
+              {/* soft glow rising from the crack: a static gradient whose opacity fades in (no blur, no shadow) */}
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgb(243_217_139/0.55),rgb(212_175_55/0.2)_38%,transparent_66%)]"
+                initial={reduce ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+              />
+              {/* the slit of light between lid and body: scaleY/scaleX + opacity only */}
+              <motion.span
+                aria-hidden
+                data-testid="chest-slit"
+                className="pointer-events-none absolute left-[14%] right-[14%] top-[47%] h-[6%] origin-center rounded-full bg-gradient-to-r from-transparent via-gold-light to-transparent"
+                initial={reduce ? false : { scaleX: 0.2, scaleY: 0.2, opacity: 0 }}
+                animate={{ scaleX: 1, scaleY: 1, opacity: 1 }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+              />
+            </>
           )}
         </>
       )}

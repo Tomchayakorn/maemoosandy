@@ -16,6 +16,11 @@ import { chestSfx } from "@/lib/audio/chestSfx";
 import { rewardTier } from "@/lib/mystic/sfx-tier";
 
 type ApiError = { error?: { message?: string } };
+/** Minimum time from the tap to the reveal: the lid stays ajar with a slit of light. Presentation only — the server has already decided. */
+const PEEK_MS = 450;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** a clock reading, kept outside the component (the compiler lint treats a direct performance.now() call in a handler as render-impure) */
+const nowMs = () => performance.now();
 /** ×1.0125, ×2.16, ×75.6 (shortest form with at least 2 decimals) */
 const x = (bp: number | null) => {
   if (bp === null) return "—";
@@ -120,9 +125,18 @@ export function MysticGame({
     chestSfx.open(); // the tap itself: latch + creak + sparkle, played at once (not after the server answers)
     setBusyTile(tile);
     setLastTile(tile);
+    const tapped = nowMs();
     const view = await call("/api/mystic/open", { roundId: round.roundId, tile });
+    if (!view) {
+      setBusyTile(null); // an error never waits
+      return;
+    }
+    // keep the lid ajar a moment before the reveal (same for safe and cursed). Keep the tap lock until then: `call` released it.
+    inFlight.current = true;
+    const wait = (reduce ? 120 : PEEK_MS) - (nowMs() - tapped);
+    if (wait > 0) await sleep(wait);
+    inFlight.current = false;
     setBusyTile(null);
-    if (!view) return;
     setRound(view);
     // a safe chest (or an automatic payout): the prize sound, grander for a bigger prize; a cursed chest gets none
     if (view.status !== "lost") chestSfx.reward(rewardTier(view.payout, view.bet, view.auto));
@@ -153,12 +167,15 @@ export function MysticGame({
   const nextBp = round && k < maxSafe(round.mines) ? multiplierBp(round.mines, k + 1) : null;
 
   return (
-    <section className="flex flex-col gap-4 text-center">
+    <section className={"flex flex-col text-center " + (active ? "gap-3" : "gap-4")}>
       <ChestHero status={round?.status ?? null} busy={busy} compact={round !== null} still={!!reduce} />
 
-      <p className="text-sm text-cream-muted">
-        เหรียญคงเหลือ <b className="text-gold-light">{formatCoins(balance)}</b> · รับสูงสุด {formatCoins(MAX_PAYOUT)} เหรียญต่อรอบ
-      </p>
+      {/* while a round is running the header badge shows the balance and the panel below holds the numbers that matter: save the row */}
+      {!active && (
+        <p className="text-sm text-cream-muted">
+          เหรียญคงเหลือ <b className="text-gold-light">{formatCoins(balance)}</b> · รับสูงสุด {formatCoins(MAX_PAYOUT)} เหรียญต่อรอบ
+        </p>
+      )}
 
       {unavailable && (
         <p className="rounded-2xl border border-gold/30 bg-velvet/70 p-3 text-sm text-gold-light">เกมนี้ยังเตรียมระบบไม่เสร็จ กรุณากลับมาใหม่ภายหลังค่ะ</p>
@@ -188,7 +205,7 @@ export function MysticGame({
                   index={t}
                   kind={kind}
                   loading={busyTile === t}
-                  disabled={!active || busy || opened}
+                  disabled={!active || busy || opened || busyTile !== null}
                   badge={badge}
                   reduce={!!reduce}
                   onOpen={() => openTile(t)}
@@ -198,28 +215,51 @@ export function MysticGame({
           </div>
 
           {active && (
-            <div className="flex flex-col gap-2.5 rounded-2xl border border-gold/40 bg-velvet/80 p-3 text-sm shadow-[0_0_24px_-10px_rgb(168_85_247/0.6)]">
-              <p className="text-xs text-cream-muted">
+            <div className="flex flex-col gap-2 rounded-2xl border border-gold/40 bg-velvet/80 p-2.5 text-sm shadow-[0_0_24px_-10px_rgb(168_85_247/0.6)]">
+              {/* the stack you hold right now, big, with the multiplier */}
+              <div data-testid="mystic-stack" className="flex items-end justify-between gap-3 text-left">
+                <div>
+                  <p className="text-[11px] text-cream-muted">ยอดสะสมตอนนี้</p>
+                  <p className="font-tarot text-3xl leading-none text-gold-gradient" aria-live="polite">
+                    {k > 0 ? formatCoins(round.payout) : "0"}
+                    <span className="ml-1 font-sans text-sm text-cream">เหรียญ</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-cream-muted">ตัวคูณ</p>
+                  <p className="font-tarot text-2xl leading-none text-purple-100">{k > 0 ? x(currentBp) : "—"}</p>
+                </div>
+              </div>
+              <p className="text-left text-xs text-cream-muted">
                 เดิมพัน <b className="text-cream">{formatCoins(round.bet)}</b> · จุดอาถรรพ์ <b className="text-cream">{round.mines}</b> จุด · เปิดปลอดภัย{" "}
                 <b className="text-gold-light">{k}</b>/{maxSafe(round.mines)} ใบ
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-gold/30 bg-midnight/70 px-2 py-1.5">
-                  <p className="text-[11px] text-cream-muted">ตัวคูณตอนนี้</p>
-                  <p className="font-tarot text-xl leading-tight text-gold-gradient">{k > 0 ? x(currentBp) : "—"}</p>
-                  <p className="text-xs text-gold-light" aria-live="polite">
-                    ลุ้นรับ <b className="font-tarot text-base">{k > 0 ? formatCoins(round.payout) : "0"}</b> เหรียญ
-                  </p>
+              {/* the choice: stop and keep the stack, or open on (chance from the public odds) */}
+              {k > 0 ? (
+                <div data-testid="mystic-choice" className="grid grid-cols-2 gap-2 text-left text-xs leading-snug">
+                  <div className="rounded-xl border border-emerald-300/40 bg-emerald-400/5 px-2 py-1">
+                    <p className="font-semibold text-emerald-200">✋ หยุดตอนนี้</p>
+                    <p className="text-cream">
+                      รับ <b className="font-tarot text-sm">{formatCoins(round.payout)}</b> เหรียญ แน่นอน
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-purple-400/40 bg-purple-500/5 px-2 py-1">
+                    <p className="font-semibold text-purple-200">🎲 เปิดต่อ · รอด {nextBp !== null ? Math.round(((TILES - round.mines - k) / (TILES - k)) * 100) : 0}%</p>
+                    <p className="text-cream">
+                      {nextBp !== null ? (
+                        <>
+                          ได้ <b className="font-tarot text-sm">{formatCoins(payoutFor(round.bet, round.mines, k + 1))}</b> หรือเสียหมด
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-purple-400/30 bg-midnight/70 px-2 py-1.5">
-                  <p className="text-[11px] text-cream-muted">ถ้าหีบถัดไปปลอดภัย</p>
-                  <p className="font-tarot text-xl leading-tight text-purple-200">{nextBp !== null ? x(nextBp) : "—"}</p>
-                  <p className="text-xs text-purple-100">
-                    จะได้ <b className="font-tarot text-base">{nextBp !== null ? formatCoins(payoutFor(round.bet, round.mines, k + 1)) : "—"}</b> เหรียญ
-                  </p>
-                </div>
-              </div>
-              <GoldButton onClick={cashOut} disabled={busy || k < 1} size="lg" className="w-full">
+              ) : (
+                <p className="text-left text-xs text-purple-200">เปิดหีบใบแรกเพื่อเริ่มสะสมยอด แล้วเลือกได้ว่าจะรับเหรียญหรือไปต่อ</p>
+              )}
+              <GoldButton onClick={cashOut} disabled={busy || busyTile !== null || k < 1} size="lg" className="w-full">
                 {busy && busyTile === null ? "กำลังรับเหรียญ…" : k < 1 ? "เปิดหีบปลอดภัย 1 ใบก่อน แล้วจึงรับเหรียญได้" : `รับเหรียญทันที ${formatCoins(round.payout)}`}
               </GoldButton>
             </div>
@@ -355,7 +395,7 @@ function ChestHero({ status, busy, compact, still }: { status: MysticRoundView["
         height={360}
         decoding="async"
         draggable={false}
-        className={"w-full object-cover transition-all duration-500 " + (compact ? "aspect-[16/4.5] object-[50%_42%]" : "aspect-video") + " " + (status === "lost" ? "saturate-50 brightness-75" : "") + (busy ? " brightness-110" : "")}
+        className={"w-full object-cover transition-all duration-500 " + (compact ? "aspect-[16/3] object-[50%_42%]" : "aspect-video") + " " + (status === "lost" ? "saturate-50 brightness-75" : "") + (busy ? " brightness-110" : "")}
       />
       {status === "lost" && <span aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle,transparent_40%,rgb(127_29_29/0.55))]" />}
       <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-midnight/80 to-transparent" />
