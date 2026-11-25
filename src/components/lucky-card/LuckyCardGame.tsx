@@ -8,6 +8,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { getLuckyCardMessage, LUCKY_CARD_CATEGORY_LABEL } from "@/data/lucky-card-messages";
+import { cardSfx } from "@/lib/audio/cardSfx";
+import { cardSoundTier } from "@/lib/lucky-card/sfx-tier";
 import { GUARANTEE_DRY_COINS, GUARANTEE_DRY_ROUNDS, GUARANTEE_EVERY_COINS, GUARANTEE_EVERY_ROUNDS } from "@/lib/lucky-card/guarantee";
 import { BONUS_TARGET, BONUS_WITHDRAW_THB, bonusProgress } from "@/lib/lucky-card/bonus";
 import type { LuckyCardOutcome, LuckyCardPlayResponse } from "@/lib/lucky-card/types";
@@ -30,6 +32,10 @@ type Phase =
   | { name: "pick" }
   | { name: "loading"; index: number }
   | { name: "result"; index: number; outcome: LuckyCardOutcome };
+
+/** Shortest gap between the tap and the result sound, so the flip sound is heard first even when the server answers instantly. */
+const FLIP_SOUND_MS = 300;
+const nowMs = () => performance.now();
 
 /** Themed lines shown before the player picks a card (ritual flavour only: the pick does not change the draw, and the footnote says so). */
 const PICK_TEASERS = [
@@ -83,6 +89,7 @@ export function LuckyCardGame({
     balanceRef.current = balance;
   }, [balance]);
   useEffect(() => () => walletBus.release(balanceRef.current), []);
+  useEffect(() => () => cardSfx.stop(), []); // leaving the page: cut any sound and release the music ducking
 
   useSurpriseBlock(phase.name === "loading"); // no cat-game surprise while a round is being drawn (the inline result card does not block it; a short delay lets it be seen first)
 
@@ -92,11 +99,14 @@ export function LuckyCardGame({
     if (busy.current || notEnough || phase.name !== "pick") return;
     busy.current = true;
     setError(null);
+    cardSfx.flip(); // the tap itself: played at once (also unlocks audio for the result sound)
+    const tappedAt = nowMs();
     const before = balance;
     setPhase({ name: "loading", index }); // card flips instantly
     setBalance(before - LUCKY_CARD_COST);
     walletBus.hold(before - LUCKY_CARD_COST);
     const rollback = (msg: string) => {
+      cardSfx.stop();
       setBalance(before);
       walletBus.release(before);
       setPhase({ name: "pick" });
@@ -124,6 +134,7 @@ export function LuckyCardGame({
       walletBus.release(json.balance);
       setPhase({ name: "result", index, outcome: json.outcome });
       busy.current = false;
+      cardSfx.result(cardSoundTier(json.outcome), Math.max(0, FLIP_SOUND_MS - (nowMs() - tappedAt)) / 1000);
       celebrate(json.outcome, cardRefs.current[index]);
       router.refresh();
     } catch {
