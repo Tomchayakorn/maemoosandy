@@ -2,17 +2,21 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { bgm } from "@/lib/audio/bgm";
-import { CANCEL_SETTLE_MS, cancelSpeech, isBasicVoice, speechBusy, speechSupported, waitForThaiVoice } from "./speech";
+import { CANCEL_SETTLE_MS, cancelSpeech, getThaiVoices, isBasicVoice, speechBusy, speechSupported, waitForThaiVoice } from "./speech";
 import { toSpeechPhrases } from "./thai-text";
 
 /**
- * "blocked": the browser did not start the reading (mobile browsers often refuse speech that is not started by a tap, or silently drop it).
- * The UI then shows a clear "tap to listen" button — a tap is a user gesture, so it plays.
+ * "blocked": the browser did not start the reading by itself and dropped it (mobile browsers often refuse speech that no tap started).
+ *            The UI then shows a clear "tap to listen" button — a tap is a user gesture, so it plays.
+ * "failed":  every Thai voice on the device errored or stalled; `errorCode` says why (e.g. "synthesis-failed").
  */
-export type ReadAloudStatus = "idle" | "loading" | "speaking" | "paused" | "done" | "no-voice" | "unsupported" | "blocked";
+export type ReadAloudStatus = "idle" | "loading" | "speaking" | "paused" | "done" | "no-voice" | "unsupported" | "blocked" | "failed";
 
-/** How long to wait for the first sound before calling the reading blocked. */
-const START_WATCHDOG_MS = 2500;
+/** After this long with the engine holding the queue but no sound yet, the voice is treated as stalled and the next voice is tried. */
+const STALL_MS = 10_000;
+/** How long the engine may show neither "speaking" nor "pending" before the speech counts as silently dropped. */
+const DROP_CHECK_MS = 1500;
+const POLL_MS = 250;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MUTE_KEY = "bnm:read-aloud-muted";
@@ -41,65 +45,116 @@ export function useReadAloud(text: string) {
   const [status, setStatus] = useState<ReadAloudStatus>("idle");
   const [muted, setMuted] = useState<boolean>(readMuted);
   const [basicVoice, setBasicVoice] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const mutedRef = useRef(muted);
   const runRef = useRef(0); // increments to invalidate callbacks from older runs
 
-  const play = useCallback(async () => {
-    if (!speechSupported()) {
-      setStatus("unsupported");
-      return;
-    }
-    const run = ++runRef.current;
-    // 1) clear any old queue (and a leftover pause) so the new reading never waits behind it
-    const hadOldQueue = speechBusy();
-    cancelSpeech();
-    setStatus("loading");
-    // 2) let the cancel settle (only when something was actually cancelled)
-    if (hadOldQueue) await sleep(CANCEL_SETTLE_MS);
-    if (run !== runRef.current) return;
-    // 3) find a Thai voice (the list can fill late on mobile)
-    const voice = await waitForThaiVoice();
-    if (run !== runRef.current) return;
-    if (!voice) {
-      setStatus("no-voice");
-      return;
-    }
-
-    setBasicVoice(isBasicVoice(voice));
-    const phrases = toSpeechPhrases(text);
-    if (phrases.length === 0) {
-      setStatus("idle");
-      return;
-    }
-    let started = false;
-    phrases.forEach((phrase, i) => {
-      const u = new SpeechSynthesisUtterance(phrase.text);
-      u.voice = voice;
-      u.lang = voice.lang;
-      // Slightly slow and level: high pitch exaggerates the sing-song accent of compact voices.
-      u.rate = phrase.kind === "heading" ? 0.85 : 0.9;
-      u.pitch = 1;
-      if (i === 0)
-        u.onstart = () => {
-          started = true;
-          if (run === runRef.current) setStatus("speaking");
-        };
-      if (i === phrases.length - 1) u.onend = () => run === runRef.current && setStatus("done");
-      u.onerror = (e) => {
-        if (run !== runRef.current || e.error === "interrupted" || e.error === "canceled") return;
-        // "not-allowed": the browser refused speech that no tap started → show the tap-to-listen button
-        setStatus(e.error === "not-allowed" ? "blocked" : "idle");
+  /**
+   * Speak the reading with one voice. Resolves once the outcome of the START is known (speech then continues on its own):
+   *  "started" · "dropped" (the engine silently ignored it) · "refused" (not-allowed) · {error} (the voice errored) · "stalled" · "stale".
+   */
+  function speakWith(voice: SpeechSynthesisVoice, phrases: ReturnType<typeof toSpeechPhrases>, run: number): Promise<"started" | "dropped" | "refused" | "stalled" | "stale" | { error: string }> {
+    return new Promise((resolve) => {
+      let started = false;
+      let settled = false;
+      const settle = (v: Parameters<typeof resolve>[0]) => {
+        if (settled) return;
+        settled = true;
+        clearInterval(poll);
+        resolve(v);
       };
-      window.speechSynthesis.speak(u);
+      phrases.forEach((phrase, i) => {
+        const u = new SpeechSynthesisUtterance(phrase.text);
+        u.voice = voice;
+        u.lang = voice.lang;
+        // Slightly slow and level: high pitch exaggerates the sing-song accent of compact voices.
+        u.rate = phrase.kind === "heading" ? 0.85 : 0.9;
+        u.pitch = 1;
+        if (i === 0)
+          u.onstart = () => {
+            started = true;
+            if (run === runRef.current) setStatus("speaking");
+            settle("started");
+          };
+        if (i === phrases.length - 1) u.onend = () => run === runRef.current && started && setStatus("done");
+        u.onerror = (e) => {
+          if (run !== runRef.current || e.error === "interrupted" || e.error === "canceled") return;
+          if (!started) settle(e.error === "not-allowed" ? "refused" : { error: e.error });
+          else setStatus("idle"); // an error in the middle of the reading: stop quietly, the button replays it
+        };
+        window.speechSynthesis.speak(u);
+      });
+      const t0 = performance.now();
+      const poll = setInterval(() => {
+        if (run !== runRef.current) return settle("stale");
+        if (started) return;
+        const age = performance.now() - t0;
+        const engineHasIt = window.speechSynthesis.speaking || window.speechSynthesis.pending;
+        // slow is fine (a cloud voice can take seconds to begin): only give up when the engine dropped it or it stalls for long
+        if (!engineHasIt && age > DROP_CHECK_MS) settle("dropped");
+        else if (age > STALL_MS) settle("stalled");
+      }, POLL_MS);
     });
-    // 4) watchdog: if nothing was heard soon, say so instead of hanging on "preparing"
-    setTimeout(() => {
-      if (run === runRef.current && !started) {
-        cancelSpeech();
-        setStatus("blocked");
+  }
+
+  /**
+   * Start (or restart) the reading. `fromTap`: called from a tap — a refusal then is a real failure of that voice, while a silent drop of an
+   * automatic start becomes the "tap to listen" state.
+   */
+  const play = useCallback(
+    async (fromTap = false) => {
+      if (!speechSupported()) {
+        setStatus("unsupported");
+        return;
       }
-    }, START_WATCHDOG_MS);
-  }, [text]);
+      const run = ++runRef.current;
+      // 1) clear any old queue (and a leftover pause) so the new reading never waits behind it
+      const hadOldQueue = speechBusy();
+      cancelSpeech();
+      setStatus("loading");
+      setErrorCode(null);
+      // 2) let the cancel settle (only when something was actually cancelled)
+      if (hadOldQueue) await sleep(CANCEL_SETTLE_MS);
+      if (run !== runRef.current) return;
+      // 3) find Thai voices (the list can fill late on mobile)
+      if (!(await waitForThaiVoice())) {
+        if (run === runRef.current) setStatus("no-voice");
+        return;
+      }
+      if (run !== runRef.current) return;
+      const voices = getThaiVoices();
+      const phrases = toSpeechPhrases(text);
+      if (voices.length === 0 || phrases.length === 0) {
+        setStatus(voices.length === 0 ? "no-voice" : "idle");
+        return;
+      }
+
+      // 4) try the voices best-first until one starts; a slow start is waited for, a failed one is skipped
+      let lastError = "no-sound";
+      for (const voice of voices) {
+        if (run !== runRef.current) return;
+        setBasicVoice(isBasicVoice(voice));
+        const outcome = await speakWith(voice, phrases, run);
+        if (outcome === "stale") return;
+        if (outcome === "started") return;
+        if (outcome === "dropped" && !fromTap) {
+          // an automatic start the browser ignored: ask for a tap instead of trying other voices
+          cancelSpeech();
+          setStatus("blocked");
+          return;
+        }
+        lastError = typeof outcome === "string" ? (outcome === "refused" ? "not-allowed" : outcome) : outcome.error;
+        cancelSpeech();
+        await sleep(CANCEL_SETTLE_MS);
+      }
+      if (run === runRef.current) {
+        setErrorCode(lastError);
+        setStatus("failed");
+      }
+    },
+    // speakWith only uses refs and stable setters
+    [text],
+  );
 
   /** Silence the device and make callbacks from the current run stale. */
   const cancelRun = useCallback(() => {
@@ -128,7 +183,7 @@ export function useReadAloud(text: string) {
     writeMuted(next);
     setMuted(next);
     if (next) stop();
-    else void play();
+    else void play(true); // switching auto-read on is a tap
   }, [play, stop]);
 
   // Duck the background music only while Mae Mu Sandy is actually speaking;
@@ -145,5 +200,5 @@ export function useReadAloud(text: string) {
     return cancelRun;
   }, [play, cancelRun]);
 
-  return { status, muted, basicVoice, play, pause, resume, stop, toggleMuted };
+  return { status, muted, basicVoice, errorCode, play, pause, resume, stop, toggleMuted };
 }

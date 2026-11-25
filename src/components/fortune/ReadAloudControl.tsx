@@ -31,7 +31,7 @@ function SoundBars() {
 
 /** "Mae Mu is reading" bar: play / pause / replay plus a remembered auto-read toggle. */
 export function ReadAloudControl({ text }: { text: string }) {
-  const { status, muted, basicVoice, play, pause, resume, toggleMuted } = useReadAloud(text);
+  const { status, muted, basicVoice, errorCode, play, pause, resume, toggleMuted } = useReadAloud(text);
 
   if (status === "unsupported") {
     return (
@@ -44,7 +44,26 @@ export function ReadAloudControl({ text }: { text: string }) {
         <p>อุปกรณ์นี้ยังไม่มีเสียงอ่านภาษาไทย — เพิ่มเสียงภาษาไทยในการตั้งค่าเครื่องแล้วลองใหม่ได้นะคะ</p>
         <button
           type="button"
-          onClick={() => void play()}
+          onClick={() => void play(true)}
+          data-testid="read-aloud-retry"
+          className="h-10 rounded-full border border-gold/50 px-5 text-sm text-gold-light transition hover:bg-gold/10"
+        >
+          ลองใหม่
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div data-testid="read-aloud-failed" className="flex flex-col items-center gap-2 rounded-2xl border border-gold/20 bg-velvet/60 px-4 py-3 text-center text-xs text-cream-muted">
+        <p>
+          เครื่องนี้อ่านเสียงไทยไม่สำเร็จ{errorCode ? ` (รหัส: ${errorCode})` : ""} ลองตรวจว่าเปิดเสียงเครื่องแล้ว
+          (iPhone: สวิตช์ข้างเครื่องต้องไม่อยู่โหมดเงียบ) หรือเปิดเสียงภาษาไทยในการตั้งค่าเครื่อง แล้วกดลองใหม่นะคะ
+        </p>
+        <button
+          type="button"
+          onClick={() => void play(true)}
           data-testid="read-aloud-retry"
           className="h-10 rounded-full border border-gold/50 px-5 text-sm text-gold-light transition hover:bg-gold/10"
         >
@@ -72,7 +91,7 @@ export function ReadAloudControl({ text }: { text: string }) {
   function handleMain() {
     if (speaking) pause();
     else if (status === "paused") resume();
-    else void play();
+    else void play(true);
   }
 
   const bar = (
@@ -120,6 +139,7 @@ export function ReadAloudControl({ text }: { text: string }) {
     <details className="px-3 text-xs text-cream-muted">
       <summary className="cursor-pointer select-none text-gold-light/80">อยากได้เสียงแม่มูที่นุ่มนวลขึ้น?</summary>
       <ul className="mt-2 flex list-disc flex-col gap-1 pl-4 leading-relaxed">
+        <li>iPhone: ถ้าไม่ได้ยินเสียงเลย ให้ตรวจสวิตช์ข้างเครื่องไม่ให้อยู่โหมดเงียบ และเพิ่มระดับเสียง</li>
         <li>iPhone / iPad: ตั้งค่า › การช่วยการเข้าถึง › เนื้อหาที่พูด › เสียง › ไทย › ดาวน์โหลด Kanya (ปรับปรุง)</li>
         <li>Mac: การตั้งค่าระบบ › การช่วยการเข้าถึง › เนื้อหาที่พูด › เสียงระบบ › จัดการเสียง › ไทย › Kanya (Enhanced)</li>
         <li>Windows / Android: เปิดเว็บด้วย Microsoft Edge หรือ Google Chrome จะได้เสียงไทยที่เป็นธรรมชาติกว่า</li>

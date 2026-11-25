@@ -35,12 +35,16 @@ export function scoreThaiVoice(voice: Pick<SpeechSynthesisVoice, "name" | "local
   return score;
 }
 
+/** Every Thai voice on this device, best first (ties keep the device's own order). Used to fall back to the next voice when one fails. */
+export function getThaiVoices(): SpeechSynthesisVoice[] {
+  if (!speechSupported()) return [];
+  const thai = window.speechSynthesis.getVoices().filter(isThai);
+  return thai.map((v, i) => ({ v, i })).sort((a, b) => scoreThaiVoice(b.v) - scoreThaiVoice(a.v) || a.i - b.i).map((x) => x.v);
+}
+
 /** Best Thai voice on this device, or null when there is none. */
 export function getThaiVoice(): SpeechSynthesisVoice | null {
-  if (!speechSupported()) return null;
-  const thai = window.speechSynthesis.getVoices().filter(isThai);
-  if (thai.length === 0) return null;
-  return thai.reduce((best, v) => (scoreThaiVoice(v) > scoreThaiVoice(best) ? v : best));
+  return getThaiVoices()[0] ?? null;
 }
 
 /** True when the chosen voice is one of the basic, robotic-sounding ones. */

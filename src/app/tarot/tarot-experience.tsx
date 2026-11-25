@@ -64,6 +64,7 @@ export function TarotExperience({
   // ---- ask → pick
   function startPicking() {
     if (trimmed.length < 3 || !canAfford) return;
+    unlockSpeech(); // a tap: get speech ready early (it is re-done on every pick below)
     setPicked([]);
     setPhase("pick");
   }
@@ -108,11 +109,11 @@ export function TarotExperience({
 
   function pickCard(index: number) {
     if (phase !== "pick" || picked.includes(index) || picked.length >= PICK_COUNT) return;
+    unlockSpeech(); // every pick is a user gesture: keep speech unlocked until the reading arrives
     const next = [...picked, index];
     setPicked(next);
     if (next.length === PICK_COUNT) {
       // This tap is the last user gesture before the reading arrives; mobile browsers need it to allow speech.
-      unlockSpeech();
       setTimeout(requestReading, 700);
     }
   }
