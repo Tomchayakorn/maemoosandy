@@ -98,15 +98,16 @@ export function waitForThaiVoice(timeoutMs = 4000): Promise<SpeechSynthesisVoice
  */
 export function unlockSpeech(): void {
   if (!speechSupported()) return;
-  // a real (but silent) character: WebKit may not count an utterance that is only a space as "having spoken"
-  const silent = new SpeechSynthesisUtterance(".");
+  // Same as the version that worked: a silent one-space utterance, no forced language/voice (a th-TH cloud voice left in the queue
+  // could fail while being cancelled and then make the real reading fail too). Skip it when something is already queued.
+  if (speechBusy()) return;
+  const silent = new SpeechSynthesisUtterance(" ");
   silent.volume = 0;
-  silent.lang = "th-TH";
   window.speechSynthesis.speak(silent);
 }
 
 /** Time to let a cancel settle before speaking again: Chrome on Android drops a speak() issued right after cancel(). */
-export const CANCEL_SETTLE_MS = 120;
+export const CANCEL_SETTLE_MS = 250;
 
 /** True when the engine still holds something (speaking, queued or paused) that a new reading would have to clear first. */
 export function speechBusy(): boolean {

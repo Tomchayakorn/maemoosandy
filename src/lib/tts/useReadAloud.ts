@@ -17,6 +17,8 @@ const STALL_MS = 10_000;
 /** How long the engine may show neither "speaking" nor "pending" before the speech counts as silently dropped. */
 const DROP_CHECK_MS = 1500;
 const POLL_MS = 250;
+/** Pause before retrying a voice that just failed with synthesis-failed. */
+const RETRY_PAUSE_MS = 500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MUTE_KEY = "bnm:read-aloud-muted";
@@ -53,7 +55,7 @@ export function useReadAloud(text: string) {
    * Speak the reading with one voice. Resolves once the outcome of the START is known (speech then continues on its own):
    *  "started" · "dropped" (the engine silently ignored it) · "refused" (not-allowed) · {error} (the voice errored) · "stalled" · "stale".
    */
-  function speakWith(voice: SpeechSynthesisVoice, phrases: ReturnType<typeof toSpeechPhrases>, run: number): Promise<"started" | "dropped" | "refused" | "stalled" | "stale" | { error: string }> {
+  function speakWith(voice: SpeechSynthesisVoice | null, phrases: ReturnType<typeof toSpeechPhrases>, run: number): Promise<"started" | "dropped" | "refused" | "stalled" | "stale" | { error: string }> {
     return new Promise((resolve) => {
       let started = false;
       let settled = false;
@@ -65,8 +67,9 @@ export function useReadAloud(text: string) {
       };
       phrases.forEach((phrase, i) => {
         const u = new SpeechSynthesisUtterance(phrase.text);
-        u.voice = voice;
-        u.lang = voice.lang;
+        // voice === null: let the browser pick its own default Thai voice (last resort)
+        if (voice) u.voice = voice;
+        u.lang = voice ? voice.lang : "th-TH";
         // Slightly slow and level: high pitch exaggerates the sing-song accent of compact voices.
         u.rate = phrase.kind === "heading" ? 0.85 : 0.9;
         u.pitch = 1;
@@ -129,23 +132,27 @@ export function useReadAloud(text: string) {
         return;
       }
 
-      // 4) try the voices best-first until one starts; a slow start is waited for, a failed one is skipped
+      // 4) try the voices best-first until one starts; a slow start is waited for, a failed one is retried once (after a longer pause,
+      //    a speak() right after an error often fails again) and then skipped. Last resort: the browser's own default Thai voice.
       let lastError = "no-sound";
-      for (const voice of voices) {
-        if (run !== runRef.current) return;
-        setBasicVoice(isBasicVoice(voice));
-        const outcome = await speakWith(voice, phrases, run);
-        if (outcome === "stale") return;
-        if (outcome === "started") return;
-        if (outcome === "dropped" && !fromTap) {
-          // an automatic start the browser ignored: ask for a tap instead of trying other voices
+      const candidates: (SpeechSynthesisVoice | null)[] = [...voices, null];
+      for (const voice of candidates) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (run !== runRef.current) return;
+          if (voice) setBasicVoice(isBasicVoice(voice));
+          const outcome = await speakWith(voice, phrases, run);
+          if (outcome === "stale" || outcome === "started") return;
+          if (outcome === "dropped" && !fromTap) {
+            // an automatic start the browser ignored: ask for a tap instead of trying other voices
+            cancelSpeech();
+            setStatus("blocked");
+            return;
+          }
+          lastError = typeof outcome === "string" ? (outcome === "refused" ? "not-allowed" : outcome) : outcome.error;
           cancelSpeech();
-          setStatus("blocked");
-          return;
+          await sleep(attempt === 0 ? RETRY_PAUSE_MS : CANCEL_SETTLE_MS);
+          if (typeof outcome === "string" || outcome.error !== "synthesis-failed") break; // only a synthesis failure is worth one more try
         }
-        lastError = typeof outcome === "string" ? (outcome === "refused" ? "not-allowed" : outcome) : outcome.error;
-        cancelSpeech();
-        await sleep(CANCEL_SETTLE_MS);
       }
       if (run === runRef.current) {
         setErrorCode(lastError);
