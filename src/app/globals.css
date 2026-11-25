@@ -56,7 +56,7 @@ body {
   background-color: var(--velvet);
 }
 
-/* 3D backdrops (-z-10 layers, home and lucky wheel): make <body> a stacking context so they sit above the page background. */
+/* 3D backdrops (-z-10 layers: home, lucky wheel, lucky cards): make <body> a stacking context so they sit above the page background. */
 body:has([data-home-backdrop]),
 body:has([data-page-backdrop]) {
   isolation: isolate;

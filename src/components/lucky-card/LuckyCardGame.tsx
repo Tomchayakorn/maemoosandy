@@ -18,6 +18,8 @@ import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
 import { walletBus } from "@/lib/wallet-bus";
 import { BonusWithdrawAction } from "./BonusWithdrawAction";
 import { PrizeWithdrawForm } from "./PrizeWithdrawForm";
+import { TableBackdrop } from "./table/TableBackdrop";
+import { moodOf } from "./table/mood";
 
 /**
  * "ดวงดี มีเฮ" — 1 round = 20 coins, flip 1 of 8 cards.
@@ -148,7 +150,9 @@ export function LuckyCardGame({
   }
 
   return (
-    <section className="flex flex-col gap-5 text-center">
+    <section className="relative flex flex-col gap-5 text-center">
+      {/* decorative 3D table behind the cards: it only follows the screen's state */}
+      <TableBackdrop mood={moodOf(phase.name, phase.name === "result" ? phase.outcome.kind : undefined)} />
       <p className="text-sm text-cream-muted">
         เปิดไพ่ 1 ใบจาก {LUCKY_CARD_COUNT} ใบ · รอบละ <b className="text-gold-light">{LUCKY_CARD_COST}</b> เหรียญ · คงเหลือ{" "}
         <b className="text-gold-light">{formatCoins(balance)}</b> เหรียญ
@@ -163,7 +167,7 @@ export function LuckyCardGame({
       )}
 
       {phase.name !== "result" && (
-        <div className="grid grid-cols-4 gap-2.5 [perspective:900px]">
+        <div data-table-anchor className="grid grid-cols-4 gap-2.5 [perspective:900px]">
           {Array.from({ length: LUCKY_CARD_COUNT }, (_, i) => {
             const flipped = phase.name === "loading" && phase.index === i;
             return (
@@ -270,6 +274,7 @@ function ResultView({
   return (
     <motion.div
       {...pop}
+      data-table-anchor
       exit={{ opacity: 0 }}
       className={
         "relative flex flex-col items-center gap-4 overflow-hidden rounded-3xl border p-6 " +
