@@ -33,21 +33,35 @@ function SoundBars() {
 export function ReadAloudControl({ text }: { text: string }) {
   const { status, muted, basicVoice, play, pause, resume, toggleMuted } = useReadAloud(text);
 
-  if (status === "unsupported" || status === "no-voice") {
+  if (status === "unsupported") {
     return (
-      <p className="rounded-2xl border border-gold/20 bg-velvet/60 px-4 py-3 text-center text-xs text-cream-muted">
-        {status === "no-voice"
-          ? "อุปกรณ์นี้ยังไม่มีเสียงอ่านภาษาไทย — เพิ่มเสียงภาษาไทยในการตั้งค่าเครื่องแล้วลองใหม่ได้นะคะ"
-          : "เบราว์เซอร์นี้ยังไม่รองรับการอ่านออกเสียงค่ะ"}
-      </p>
+      <p className="rounded-2xl border border-gold/20 bg-velvet/60 px-4 py-3 text-center text-xs text-cream-muted">เบราว์เซอร์นี้ยังไม่รองรับการอ่านออกเสียงค่ะ</p>
+    );
+  }
+  if (status === "no-voice") {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-2xl border border-gold/20 bg-velvet/60 px-4 py-3 text-center text-xs text-cream-muted">
+        <p>อุปกรณ์นี้ยังไม่มีเสียงอ่านภาษาไทย — เพิ่มเสียงภาษาไทยในการตั้งค่าเครื่องแล้วลองใหม่ได้นะคะ</p>
+        <button
+          type="button"
+          onClick={() => void play()}
+          data-testid="read-aloud-retry"
+          className="h-10 rounded-full border border-gold/50 px-5 text-sm text-gold-light transition hover:bg-gold/10"
+        >
+          ลองใหม่
+        </button>
+      </div>
     );
   }
 
   const speaking = status === "speaking";
+  const blocked = status === "blocked";
   const label =
     status === "loading"
       ? "แม่มูกำลังเตรียมเสียง..."
-      : speaking
+      : blocked
+        ? "แตะเพื่อฟังแม่มูอ่านคำทำนาย"
+        : speaking
         ? "แม่มูกำลังอ่านคำทำนาย"
         : status === "paused"
           ? "หยุดฟังไว้ชั่วคราว"
@@ -62,10 +76,11 @@ export function ReadAloudControl({ text }: { text: string }) {
   }
 
   const bar = (
-    <div className="flex items-center gap-2 rounded-full border border-gold/40 bg-velvet/70 p-1.5 pl-2 shadow-[0_0_18px_-6px_rgb(212_175_55/0.5)]">
+    <div className={"flex items-center gap-2 rounded-full border bg-velvet/70 p-1.5 pl-2 shadow-[0_0_18px_-6px_rgb(212_175_55/0.5)] " + (blocked ? "border-gold-light" : "border-gold/40")}>
       <button
         type="button"
         onClick={handleMain}
+        data-testid="read-aloud-main"
         aria-label={speaking ? "หยุดอ่านชั่วคราว" : status === "paused" ? "อ่านต่อ" : "เล่นเสียงอ่านคำทำนาย"}
         className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-full px-2 text-left text-sm text-cream transition hover:bg-gold/10"
       >
@@ -112,9 +127,17 @@ export function ReadAloudControl({ text }: { text: string }) {
     </details>
   );
 
+  // the browser refused to start the reading by itself: say why and what to do (a tap on the button above always works)
+  const blockedNote = blocked && (
+    <p role="status" data-testid="read-aloud-blocked" className="px-3 text-center text-xs text-gold-light">
+      เบราว์เซอร์บนมือถือมักบล็อกเสียงที่เริ่มเอง — แตะปุ่มด้านบนหนึ่งครั้งเพื่อให้แม่มูอ่านคำทำนายค่ะ
+    </p>
+  );
+
   return (
     <div className="flex flex-col gap-2">
       {bar}
+      {blockedNote}
       {voiceTip}
     </div>
   );

@@ -63,16 +63,61 @@ export function waitForVoices(timeoutMs = 2000): Promise<void> {
 }
 
 /**
+ * Wait for a Thai voice to be available. Some mobile browsers fill the voice list late (or never fire `voiceschanged`), so besides the
+ * event this polls every 150 ms, up to `timeoutMs`. Resolves to the best Thai voice, or null when there is none after the wait.
+ */
+export function waitForThaiVoice(timeoutMs = 4000): Promise<SpeechSynthesisVoice | null> {
+  if (!speechSupported()) return Promise.resolve(null);
+  const now = getThaiVoice();
+  if (now) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    const finish = (v: SpeechSynthesisVoice | null) => {
+      synth.removeEventListener("voiceschanged", check);
+      clearInterval(timer);
+      clearTimeout(stop);
+      resolve(v);
+    };
+    const check = () => {
+      const v = getThaiVoice();
+      if (v) finish(v);
+    };
+    const timer = setInterval(check, 150);
+    const stop = setTimeout(() => finish(getThaiVoice()), timeoutMs);
+    synth.addEventListener("voiceschanged", check);
+  });
+}
+
+/**
  * Call inside a tap/click handler. Mobile Safari only lets a page speak after it
  * has spoken once during a user gesture, so we speak a silent utterance here.
  */
 export function unlockSpeech(): void {
   if (!speechSupported()) return;
-  const silent = new SpeechSynthesisUtterance(" ");
+  // a real (but silent) character: WebKit may not count an utterance that is only a space as "having spoken"
+  const silent = new SpeechSynthesisUtterance(".");
   silent.volume = 0;
+  silent.lang = "th-TH";
   window.speechSynthesis.speak(silent);
 }
 
+/** Time to let a cancel settle before speaking again: Chrome on Android drops a speak() issued right after cancel(). */
+export const CANCEL_SETTLE_MS = 120;
+
+/** True when the engine still holds something (speaking, queued or paused) that a new reading would have to clear first. */
+export function speechBusy(): boolean {
+  if (!speechSupported()) return false;
+  const s = window.speechSynthesis;
+  return s.speaking || s.pending || s.paused;
+}
+
+/**
+ * Clear the queue and any leftover "paused" state. cancel() alone does not reset a pause in Chrome, so a reading started after an earlier
+ * pause would be queued but never heard.
+ */
 export function cancelSpeech(): void {
-  if (speechSupported()) window.speechSynthesis.cancel();
+  if (!speechSupported()) return;
+  const s = window.speechSynthesis;
+  s.cancel();
+  if (s.paused) s.resume();
 }

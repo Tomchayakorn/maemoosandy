@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { bgm } from "@/lib/audio/bgm";
-import { cancelSpeech, getThaiVoice, isBasicVoice, speechSupported, waitForVoices } from "./speech";
+import { CANCEL_SETTLE_MS, cancelSpeech, isBasicVoice, speechBusy, speechSupported, waitForThaiVoice } from "./speech";
 import { toSpeechPhrases } from "./thai-text";
 
-export type ReadAloudStatus = "idle" | "loading" | "speaking" | "paused" | "done" | "no-voice" | "unsupported";
+/**
+ * "blocked": the browser did not start the reading (mobile browsers often refuse speech that is not started by a tap, or silently drop it).
+ * The UI then shows a clear "tap to listen" button — a tap is a user gesture, so it plays.
+ */
+export type ReadAloudStatus = "idle" | "loading" | "speaking" | "paused" | "done" | "no-voice" | "unsupported" | "blocked";
+
+/** How long to wait for the first sound before calling the reading blocked. */
+const START_WATCHDOG_MS = 2500;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MUTE_KEY = "bnm:read-aloud-muted";
 
@@ -42,12 +50,16 @@ export function useReadAloud(text: string) {
       return;
     }
     const run = ++runRef.current;
+    // 1) clear any old queue (and a leftover pause) so the new reading never waits behind it
+    const hadOldQueue = speechBusy();
     cancelSpeech();
     setStatus("loading");
-    await waitForVoices();
+    // 2) let the cancel settle (only when something was actually cancelled)
+    if (hadOldQueue) await sleep(CANCEL_SETTLE_MS);
     if (run !== runRef.current) return;
-
-    const voice = getThaiVoice();
+    // 3) find a Thai voice (the list can fill late on mobile)
+    const voice = await waitForThaiVoice();
+    if (run !== runRef.current) return;
     if (!voice) {
       setStatus("no-voice");
       return;
@@ -55,6 +67,11 @@ export function useReadAloud(text: string) {
 
     setBasicVoice(isBasicVoice(voice));
     const phrases = toSpeechPhrases(text);
+    if (phrases.length === 0) {
+      setStatus("idle");
+      return;
+    }
+    let started = false;
     phrases.forEach((phrase, i) => {
       const u = new SpeechSynthesisUtterance(phrase.text);
       u.voice = voice;
@@ -62,14 +79,26 @@ export function useReadAloud(text: string) {
       // Slightly slow and level: high pitch exaggerates the sing-song accent of compact voices.
       u.rate = phrase.kind === "heading" ? 0.85 : 0.9;
       u.pitch = 1;
-      if (i === 0) u.onstart = () => run === runRef.current && setStatus("speaking");
+      if (i === 0)
+        u.onstart = () => {
+          started = true;
+          if (run === runRef.current) setStatus("speaking");
+        };
       if (i === phrases.length - 1) u.onend = () => run === runRef.current && setStatus("done");
       u.onerror = (e) => {
         if (run !== runRef.current || e.error === "interrupted" || e.error === "canceled") return;
-        setStatus("idle");
+        // "not-allowed": the browser refused speech that no tap started → show the tap-to-listen button
+        setStatus(e.error === "not-allowed" ? "blocked" : "idle");
       };
       window.speechSynthesis.speak(u);
     });
+    // 4) watchdog: if nothing was heard soon, say so instead of hanging on "preparing"
+    setTimeout(() => {
+      if (run === runRef.current && !started) {
+        cancelSpeech();
+        setStatus("blocked");
+      }
+    }, START_WATCHDOG_MS);
   }, [text]);
 
   /** Silence the device and make callbacks from the current run stale. */
