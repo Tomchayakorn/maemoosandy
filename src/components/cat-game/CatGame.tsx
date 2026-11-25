@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { celebrateCatReward } from "@/components/cat-game/celebrate";
 import { CatBoard } from "@/components/cat-game/CatBoard";
+import { ShrineBackdrop } from "@/components/cat-game/shrine/ShrineBackdrop";
 import { playCatGame } from "@/lib/cat-game/client";
 import { goldButtonClass } from "@/components/ui/GoldButton";
 import { CAT_GAME_COST, CAT_REWARDS, catBlessing } from "@/lib/cat-game/config";
@@ -91,20 +92,24 @@ export function CatGame({
   }
 
   return (
-    <section className="flex flex-col gap-5 text-center">
+    <section className="relative flex flex-col gap-5 text-center">
+      {/* decorative 3D lucky shrine behind the game: it only follows "a cat is being drawn" and "coins were won" */}
+      <ShrineBackdrop picking={loadingIndex !== null} won={!!played && played.reward > 0} />
       <p className="text-sm text-cream-muted">
         ค่าเล่น <b className="text-gold-light">{CAT_GAME_COST}</b> เหรียญ · คงเหลือ <b className="text-gold-light">{formatCoins(balance)}</b> เหรียญ
       </p>
 
       <DailyRightStatus played={!!played} unavailable={unavailable} onReset={() => router.refresh()} />
 
-      <CatBoard
-        chosenIndex={loadingIndex ?? played?.catIndex ?? null}
-        loadingIndex={loadingIndex}
-        disabled={locked || notEnough}
-        onPick={pick}
-        tileRefs={tileRefs}
-      />
+      <div data-cat-board>
+        <CatBoard
+          chosenIndex={loadingIndex ?? played?.catIndex ?? null}
+          loadingIndex={loadingIndex}
+          disabled={locked || notEnough}
+          onPick={pick}
+          tileRefs={tileRefs}
+        />
+      </div>
 
       {error && <p className="text-sm text-rose-300">{error}</p>}
       {unavailable && (
