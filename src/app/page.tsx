@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { VoucherTrigger } from "@/components/voucher/VoucherTrigger";
 import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { Hero } from "@/components/home/Hero";
+import { MysticScene } from "@/components/home/mystic-scene/MysticScene";
 import { ServiceCard } from "@/components/home/ServiceCard";
 import { GoldButton } from "@/components/ui/GoldButton";
 import { MysticCard } from "@/components/ui/MysticCard";
@@ -13,6 +14,8 @@ import { FORTUNE_PRICES, formatCoins } from "@/lib/pricing";
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col pb-[max(8rem,calc(env(safe-area-inset-bottom)+7rem))] sm:max-w-2xl">
+      {/* decorative 3D backdrop: fixed behind the page, takes no touches */}
+      <MysticScene />
       <Hero />
       <Suspense fallback={null}>
         <CatSurpriseHost />

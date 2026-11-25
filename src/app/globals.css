@@ -56,6 +56,11 @@ body {
   background-color: var(--velvet);
 }
 
+/* Home page 3D backdrop (a fixed -z-10 layer): make <body> a stacking context so the layer sits above the page background. */
+body:has([data-home-backdrop]) {
+  isolation: isolate;
+}
+
 body {
   color: var(--cream);
   background-image:
