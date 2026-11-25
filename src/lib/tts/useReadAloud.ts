@@ -65,7 +65,11 @@ export function useReadAloud(text: string) {
         clearInterval(poll);
         resolve(v);
       };
-      phrases.forEach((phrase, i) => {
+      // Feed the engine a few phrases at a time instead of queueing 100+ utterances at once (mobile engines choke on a long queue).
+      const BATCH = 4;
+      let next = 0;
+      const makeUtterance = (i: number) => {
+        const phrase = phrases[i];
         const u = new SpeechSynthesisUtterance(phrase.text);
         // voice === null: let the browser pick its own default Thai voice (last resort)
         if (voice) u.voice = voice;
@@ -79,14 +83,22 @@ export function useReadAloud(text: string) {
             if (run === runRef.current) setStatus("speaking");
             settle("started");
           };
-        if (i === phrases.length - 1) u.onend = () => run === runRef.current && started && setStatus("done");
+        u.onend = () => {
+          if (run !== runRef.current) return;
+          if (i === phrases.length - 1) {
+            if (started) setStatus("done");
+          } else if (next < phrases.length) {
+            window.speechSynthesis.speak(makeUtterance(next++));
+          }
+        };
         u.onerror = (e) => {
           if (run !== runRef.current || e.error === "interrupted" || e.error === "canceled") return;
           if (!started) settle(e.error === "not-allowed" ? "refused" : { error: e.error });
           else setStatus("idle"); // an error in the middle of the reading: stop quietly, the button replays it
         };
-        window.speechSynthesis.speak(u);
-      });
+        return u;
+      };
+      for (; next < Math.min(BATCH, phrases.length); ) window.speechSynthesis.speak(makeUtterance(next++));
       const t0 = performance.now();
       const poll = setInterval(() => {
         if (run !== runRef.current) return settle("stale");

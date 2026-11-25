@@ -13,7 +13,9 @@
 export type SpeechPhrase = { text: string; kind: "heading" | "body" };
 
 const MIN_PHRASE = 14; // merge shorter fragments so speech isn't choppy
-const MAX_PHRASE = 140; // keep utterances short (Chrome stalls on long ones)
+const MAX_PHRASE = 100; // keep utterances short (Chrome stalls on long ones, mobile engines fail on long ones)
+/** Upper bound on what is spoken (the screen always shows the whole reading); the cut falls on a phrase boundary. */
+export const MAX_SPOKEN_CHARS = 4000;
 
 const segmenter =
   typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter("th", { granularity: "word" }) : null;
@@ -56,6 +58,8 @@ export function normalizeForSpeech(line: string): string {
     // "ไพ่กลับหัว" stays; punctuation/symbols become pauses (spaces)
     .replace(/[·•—–|/]/g, " ")
     .replace(/[“”"'‘’]/g, "")
+    // anything a voice can't say (emoji, arrows, stars, other symbols): keep Thai, Latin letters, digits and basic punctuation only
+    .replace(/[^\u0E00-\u0E7FA-Za-z0-9\s.,!?%()฿-]/g, " ")
     .replace(/[:;]/g, " ")
     // Hotline / long numbers read digit by digit: "1323" → "1 3 2 3"
     .replace(/\d{4,}/g, (d) => d.split("").join(" "))
@@ -112,5 +116,13 @@ export function toSpeechPhrases(reading: string): SpeechPhrase[] {
     if (kind === "heading") out.push({ text, kind });
     else for (const p of splitPhrases(text)) out.push({ text: p, kind });
   }
-  return out;
+  // cap the spoken length at a phrase boundary
+  let total = 0;
+  const capped: SpeechPhrase[] = [];
+  for (const p of out) {
+    total += p.text.length;
+    if (total > MAX_SPOKEN_CHARS && capped.length) break;
+    capped.push(p);
+  }
+  return capped;
 }
