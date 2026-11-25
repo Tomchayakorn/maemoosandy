@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EDGE_GAP, layout, LEVELS, MIN_FRAME_MS, stepLook, targetLook, tierFill } from "./mood";
+import { LEVELS, MIN_FRAME_MS, rings, segment, stepLook, targetLook, tierFill } from "./mood";
 
 describe("power wheel tower", () => {
   it("fills one tier per cleared level and spins up only while the wheel turns", () => {
@@ -18,20 +18,24 @@ describe("power wheel tower", () => {
     for (let i = 0; i < 150; i++) look = stepLook(look, targetLook(false, 12), 1 / 30);
     expect(look.energy).toBeCloseTo(1, 2);
   });
-  it("never crowds the screen edges, on narrow phones or wide screens", () => {
-    for (const [w, h] of [[320, 568], [375, 812], [430, 932], [768, 1024], [1440, 900]]) {
-      const wheel = { centre: h * 0.6, radius: Math.min(w - 32, 336) / 2 };
-      const l = layout(w, h, wheel);
-      const wheelTop = h / 2 - (wheel.centre - wheel.radius); // in the same upward coordinates
-      expect(l.tiers).toHaveLength(LEVELS);
-      for (const t of l.tiers) {
-        expect(t.radius).toBeLessThanOrEqual(w / 2 - EDGE_GAP);
-        expect(Math.abs(t.y)).toBeLessThan(h / 2);
-        expect(t.y).toBeLessThan(wheelTop); // the text above the wheel is never crossed
-      }
-      for (const r of l.halo.radii) expect(r).toBeLessThanOrEqual(w / 2 - EDGE_GAP);
-      expect(l.tiers[11].y).toBeGreaterThan(l.tiers[0].y);
+  it("keeps every ring between the wheel's rim and the edge of the wheel box, at phone and desktop sizes", () => {
+    for (const size of [288, 328, 336]) {
+      const r = rings(size);
+      expect(r.reach).toBe(size / 2);
+      expect(r.rim).toBeLessThan(r.hairline);
+      expect(r.hairline).toBeLessThan(r.meter);
+      expect(r.meter).toBeLessThan(r.outer);
+      expect(r.outer).toBeLessThanOrEqual(r.reach - 2);
     }
     expect(MIN_FRAME_MS).toBeGreaterThanOrEqual(30);
+  });
+  it("lays the twelve meter parts clockwise from the top with small gaps", () => {
+    const mid = (i: number) => segment(i).start + segment(i).sweep / 2;
+    expect(mid(0)).toBeCloseTo((75 * Math.PI) / 180, 6); // just right of the top
+    expect(mid(3)).toBeCloseTo((-15 * Math.PI) / 180, 6); // just below the right side
+    for (let i = 1; i < LEVELS; i++) {
+      expect(segment(i).start + segment(i).sweep).toBeLessThan(segment(i - 1).start);
+      expect(mid(i - 1) - mid(i)).toBeCloseTo(Math.PI / 6, 6);
+    }
   });
 });

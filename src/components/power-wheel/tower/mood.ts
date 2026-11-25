@@ -1,16 +1,16 @@
 /**
- * Looks and placement of the 3D power tower behind วงล้อไต่ชั้น (pure: no DOM, no three.js — unit tested). It reads only two facts the screen
+ * Looks and placement of the 3D power rings behind วงล้อไต่ชั้น (pure: no DOM, no three.js — unit tested). It reads only two facts the screen
  * already shows — whether the wheel is turning and how many levels are cleared; nothing here spins, climbs or pays anything.
- * Coordinates are CSS pixels from the middle of the screen, y upwards.
+ * Everything is centred on the wheel; distances are CSS pixels.
  */
 
 export const LEVELS = 12;
 /** At most ~30 drawn frames a second: the wheel's own animation needs the rest. */
 export const MIN_FRAME_MS = 30;
-/** Nothing solid comes closer to a screen edge than this. */
-export const EDGE_GAP = 12;
-/** Widest half-size of the composition on large screens. */
-const MAX_HALF = 300;
+/** The loop rests this long after the last scroll movement, so scrolling the page stays smooth. */
+export const SCROLL_REST_MS = 180;
+/** How far the layer reaches past the wheel box on each side (soft light only). */
+export const GLOW_PAD = 40;
 
 export type TowerLook = {
   /** Pace of the rings and motes. */
@@ -38,24 +38,33 @@ export function stepLook(current: TowerLook, target: TowerLook, dt: number): Tow
 /** How lit tier `index` (0 = the lowest) is with `energy` of stored power: 1 = cleared, 0 = not yet, in between while filling. */
 export const tierFill = (index: number, energy: number) => Math.min(Math.max(energy * LEVELS - index, 0), 1);
 
-export type Layout = {
-  /** Twelve flat rings climbing from the foot of the screen to the wheel — never above it, where the title and text are. */
-  tiers: { y: number; radius: number }[];
-  /** Round rings around the wheel's resting place. */
-  halo: { y: number; radii: number[] };
+/** The wheel drawing's gold rim reaches this share of half the wheel box (207 of 240 in ClimbWheel's drawing). */
+export const RIM_SHARE = 207 / 240;
+
+export type Rings = {
+  /** Outer edge of the wheel's gold rim. */
+  rim: number;
+  /** A hairline just outside the rim, the twelve-part level meter, and the outermost ring — all inside the wheel's own box. */
+  hairline: number;
+  meter: number;
+  outer: number;
+  /** Half the wheel box: nothing solid goes past this, so text and buttons around the box are never touched. */
+  reach: number;
 };
 
-/** `wheel`: where the wheel's centre rests (from the top of the screen) and its radius, CSS pixels. */
-export function layout(width: number, height: number, wheel: { centre: number; radius: number }): Layout {
-  const half = Math.min(width / 2 - EDGE_GAP, MAX_HALF);
-  const y = height / 2 - Math.min(Math.max(wheel.centre, height * 0.3), height * 0.75);
-  const radii = [1.1, 1.2, 1.32].map((k, n) => Math.min(wheel.radius * k, half - (2 - n) * 7));
-  const bottom = -height * 0.47;
-  // the highest tier stays a little under the wheel's top edge
-  const top = Math.max(y + wheel.radius * 0.8, bottom + height * 0.25);
-  const tiers = Array.from({ length: LEVELS }, (_, n) => {
-    const u = n / (LEVELS - 1);
-    return { y: bottom + u * (top - bottom), radius: half * (1 - 0.1 * u) };
-  });
-  return { tiers, halo: { y, radii } };
+/** Radii in CSS pixels for a wheel box `wheelSize` pixels wide, all centred on the wheel. */
+export function rings(wheelSize: number): Rings {
+  const reach = wheelSize / 2;
+  const rim = reach * RIM_SHARE;
+  const room = reach - rim;
+  return { rim, hairline: rim + room * 0.14, meter: rim + room * 0.48, outer: rim + room * 0.84, reach };
+}
+
+/** Gap between two parts of the level meter, radians. */
+const GAP = 0.06;
+
+/** Part `index` of the level meter as a torus arc (angles counter-clockwise from the right): part 0 starts at the top, going clockwise. */
+export function segment(index: number): { start: number; sweep: number } {
+  const step = (Math.PI * 2) / LEVELS;
+  return { start: Math.PI / 2 - (index + 1) * step + GAP / 2, sweep: step - GAP };
 }

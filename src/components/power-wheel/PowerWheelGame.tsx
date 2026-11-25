@@ -218,8 +218,6 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
 
   return (
     <section className="flex flex-col gap-4 text-center">
-      {/* decorative 3D power tower, fixed behind the page: it only follows "turning" and the cleared level */}
-      <TowerBackdrop spinning={spinning} level={round && !round.failed ? round.level : 0} />
       <p className="text-sm text-cream-muted">
         เหรียญคงเหลือ <b className="text-gold-light">{formatCoins(balance)}</b> · โบนัสสูงสุดต่อรอบ {formatCoins(MAX_PAYOUT)} เหรียญ
       </p>
@@ -227,6 +225,8 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
       {unavailable && <p className="rounded-2xl border border-gold/30 bg-velvet/70 p-3 text-sm text-gold-light">เกมนี้ยังเตรียมระบบไม่เสร็จ กรุณากลับมาใหม่ภายหลังค่ะ</p>}
 
       <div className="relative">
+        {/* decorative 3D rings centred on the wheel, scrolling with it: they only follow "turning" and the cleared level */}
+        <TowerBackdrop spinning={spinning} level={round && !round.failed ? round.level : 0} />
         <ClimbWheel danger={danger} rotation={rotation} seconds={seconds} spinning={spinning} glow={glow} />
       </div>
 

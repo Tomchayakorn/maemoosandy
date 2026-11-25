@@ -3,22 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { pixelRatioFor } from "@/components/home/mystic-scene/camera";
 import type { TowerHandle } from "./createTower";
-import { MIN_FRAME_MS, stepLook, targetLook } from "./mood";
+import { GLOW_PAD, MIN_FRAME_MS, SCROLL_REST_MS, stepLook, targetLook } from "./mood";
 
 /** Motion angle and time of the still picture shown when the visitor prefers reduced motion. */
 const STILL = 2.5;
 
 /**
- * The 3D power tower behind วงล้อไต่ชั้น: fixed to the screen, so it never moves with scrolling. Decorative: it receives only `spinning` and
- * `level`, takes no touches and touches no spin, climb, power, coin, reward, API, database, wheel, button or sound.
+ * The 3D power rings behind วงล้อไต่ชั้น. Place it inside the wheel's own box (`relative`): it is centred on that box with CSS, so it scrolls
+ * with the wheel and can never drift off its centre. Decorative: it receives only `spinning` and `level`, takes no touches and touches no
+ * spin, climb, power, coin, reward, API, database, wheel, button or sound.
  *
- * The loop runs only while the tab is visible and is disposed on leaving the page. Reduced motion: a still picture that still shows the cleared
- * levels. Without WebGL the painted backdrop stays. `data-page-backdrop` makes <body> a stacking context (globals.css), so this -z-10 layer
- * sits above the page background and below all content.
+ * The loop runs only while the layer is on screen and the tab is visible, rests while the page scrolls, and is disposed on leaving the page.
+ * Reduced motion: a still picture that still shows the cleared levels. Without WebGL the page just has no rings. `data-page-backdrop` makes
+ * <body> a stacking context (globals.css), so this -z-10 layer sits above the page background, below all content.
  */
 export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: number }) {
   const layerRef = useRef<HTMLDivElement>(null);
-  const holderRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef({ spinning, level });
   const refreshRef = useRef<() => void>(() => {});
   const [ready, setReady] = useState(false);
@@ -30,12 +30,12 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
 
   useEffect(() => {
     const layer = layerRef.current;
-    const holder = holderRef.current;
-    if (!layer || !holder) return;
+    const box = layer?.parentElement;
+    if (!layer || !box) return;
     // a fresh canvas per mount: its WebGL context is released on unmount
     const canvas = document.createElement("canvas");
     canvas.className = "absolute inset-0 size-full";
-    holder.append(canvas);
+    layer.append(canvas);
 
     let scene: TowerHandle | null = null;
     let disposed = false;
@@ -48,17 +48,13 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
     let slow = false;
     let late = 0;
     let frames = 0;
+    let onScreen = true;
+    let scrolling = false;
+    let scrollTimer: ReturnType<typeof setTimeout> | undefined;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const target = () => targetLook(stateRef.current.spinning, stateRef.current.level);
 
-    // where the wheel rests when the page is at the top (layout offsets ignore the scroll position)
-    const wheelAt = () => {
-      const wheel = document.querySelector<HTMLElement>("[data-testid=climb-wheel]");
-      if (!wheel) return { centre: layer.clientHeight * 0.55, radius: Math.min(layer.clientWidth, 448) * 0.42 };
-      let top = 0;
-      for (let node: HTMLElement | null = wheel; node; node = node.offsetParent as HTMLElement | null) top += node.offsetTop;
-      return { centre: Math.round(top + wheel.offsetHeight / 2), radius: Math.round(wheel.offsetWidth / 2) };
-    };
+    const wheelSize = () => box.querySelector<HTMLElement>("[data-testid=climb-wheel]")?.offsetWidth ?? Math.min(box.clientWidth, 336);
     const draw = () => {
       if (!scene || lost) return;
       scene.render({ angle, time, energy: look.energy, boost: look.boost });
@@ -84,7 +80,7 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
       }
     };
     const sync = () => {
-      const run = !!scene && !lost && !document.hidden && !motion.matches;
+      const run = !!scene && !lost && onScreen && !scrolling && !document.hidden && !motion.matches;
       if (run && !raf) {
         last = 0;
         raf = requestAnimationFrame(tick);
@@ -92,8 +88,9 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
         cancelAnimationFrame(raf);
         raf = 0;
       }
-      if (!raf && !document.hidden) {
-        if (motion.matches) look = { ...target(), boost: 0 }; // still picture: show the cleared levels at once
+      // reduced motion: a still picture that shows the cleared levels at once
+      if (motion.matches && !document.hidden) {
+        look = { ...target(), boost: 0 };
         draw();
       }
     };
@@ -101,8 +98,18 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
       const w = layer.clientWidth;
       const h = layer.clientHeight;
       if (!scene || !w || !h) return;
-      scene.setSize(w, h, wheelAt(), pixelRatioFor(window.devicePixelRatio, w, slow));
+      scene.setSize(w, h, wheelSize(), pixelRatioFor(window.devicePixelRatio, w, slow));
       draw();
+    };
+    const onScroll = () => {
+      if (motion.matches) return; // the still picture needs no redraw
+      scrolling = true;
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        scrolling = false;
+        sync();
+      }, SCROLL_REST_MS);
+      sync();
     };
     const onLost = (e: Event) => {
       e.preventDefault(); // lets the browser restore the context
@@ -119,10 +126,15 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
     canvas.addEventListener("webglcontextlost", onLost);
     canvas.addEventListener("webglcontextrestored", onRestored);
     document.addEventListener("visibilitychange", sync);
+    window.addEventListener("scroll", onScroll, { passive: true });
     motion.addEventListener("change", sync);
-    // the layer is as tall as the largest viewport (lvh), so a phone's collapsing address bar does not resize the canvas mid-scroll
     const sizes = new ResizeObserver(resize);
     sizes.observe(layer);
+    const visibility = new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      sync();
+    });
+    visibility.observe(layer);
 
     void import("./createTower")
       .then(({ createTower }) => {
@@ -141,6 +153,8 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
     // for checking in the browser console
     const debug = () => ({
       running: raf !== 0,
+      onScreen,
+      scrolling,
       frames,
       spinning: stateRef.current.spinning,
       level: stateRef.current.level,
@@ -156,8 +170,11 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
+      clearTimeout(scrollTimer);
       refreshRef.current = () => {};
       sizes.disconnect();
+      visibility.disconnect();
+      window.removeEventListener("scroll", onScroll);
       document.removeEventListener("visibilitychange", sync);
       motion.removeEventListener("change", sync);
       canvas.removeEventListener("webglcontextlost", onLost);
@@ -169,10 +186,17 @@ export function TowerBackdrop({ spinning, level }: { spinning: boolean; level: n
   }, []);
 
   return (
-    <div ref={layerRef} aria-hidden data-page-backdrop data-testid="tower-backdrop" className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-lvh overflow-hidden">
-      {/* painted backdrop: a violet shaft of light with a golden floor (also all there is without WebGL) */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_50%_55%,rgb(76_33_146/0.3),transparent_72%),radial-gradient(ellipse_90%_28%_at_50%_102%,rgb(212_175_55/0.13),transparent_70%)]" />
-      <div ref={holderRef} className={"absolute inset-0 transition-opacity duration-[1200ms] " + (ready ? "opacity-85" : "opacity-0")} />
-    </div>
+    <div
+      ref={layerRef}
+      aria-hidden
+      data-page-backdrop
+      data-testid="tower-backdrop"
+      // centred on the wheel's box; never wider than the screen, so it cannot cause sideways scrolling
+      className={
+        "pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 overflow-hidden transition-opacity duration-[1200ms] " +
+        (ready ? "opacity-100" : "opacity-0")
+      }
+      style={{ width: `min(calc(100% + ${GLOW_PAD * 2}px), 100vw)`, height: `calc(100% + ${GLOW_PAD * 2}px)` }}
+    />
   );
 }
