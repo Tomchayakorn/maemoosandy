@@ -11,6 +11,7 @@ import { formatCoins, WHEEL_SPIN_COST } from "@/lib/pricing";
 import { WITHDRAW_COINS, WITHDRAW_THB } from "@/lib/withdrawals";
 import { FantasyWheel } from "@/components/wheel/FantasyWheel";
 import { SpinFx, type SpinFxState } from "@/components/wheel/SpinFx";
+import { AltarBackdrop } from "@/components/wheel/altar/AltarBackdrop";
 import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
 import { walletBus } from "@/lib/wallet-bus";
 import { wheelSfx, type SweepDir, type WheelFx } from "@/lib/audio/wheelSfx";
@@ -401,6 +402,8 @@ export function WheelExperience({
 
       {/* Wheel (extends to the screen edges so the flame ring has room on phones) */}
       <div ref={wheelBox} data-wheel-box className="relative -mx-4 w-[calc(100%+2rem)] max-w-[30rem] self-center">
+        {/* decorative 3D altar behind the wheel: it only follows the spin / result state */}
+        <AltarBackdrop spinning={spinning} resultOpen={!!result} won={!!result && result.reward.type !== "none"} />
         {/* soft orange glow (static gradient, replaces the old per-frame drop-shadow filter) */}
         <div aria-hidden className="wheel-glow absolute inset-0" />
         {/* luck-card buff: soft golden aura behind the wheel (inside the box, never wider than the screen) */}
