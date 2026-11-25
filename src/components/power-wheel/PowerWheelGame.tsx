@@ -15,6 +15,7 @@ import { powerSfx } from "@/lib/audio/powerSfx";
 import { rewardTier } from "@/lib/mystic/sfx-tier";
 import { reconcileRound } from "@/lib/power-wheel/reconcile";
 import { ClimbWheel } from "./ClimbWheel";
+import { TowerBackdrop } from "./tower/TowerBackdrop";
 
 type ApiError = { error?: { message?: string } };
 const x = (bp: number | null) => (bp === null ? "—" : `×${(bp / 10_000).toFixed(2)}`);
@@ -217,6 +218,8 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
 
   return (
     <section className="flex flex-col gap-4 text-center">
+      {/* decorative 3D power tower, fixed behind the page: it only follows "turning" and the cleared level */}
+      <TowerBackdrop spinning={spinning} level={round && !round.failed ? round.level : 0} />
       <p className="text-sm text-cream-muted">
         เหรียญคงเหลือ <b className="text-gold-light">{formatCoins(balance)}</b> · โบนัสสูงสุดต่อรอบ {formatCoins(MAX_PAYOUT)} เหรียญ
       </p>
@@ -224,8 +227,6 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
       {unavailable && <p className="rounded-2xl border border-gold/30 bg-velvet/70 p-3 text-sm text-gold-light">เกมนี้ยังเตรียมระบบไม่เสร็จ กรุณากลับมาใหม่ภายหลังค่ะ</p>}
 
       <div className="relative">
-        {/* soft golden-violet glow behind the wheel */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-1/2 -z-10 mx-auto size-[85%] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgb(154_92_240/0.28),rgb(212_175_55/0.12)_55%,transparent_72%)] blur-xl" />
         <ClimbWheel danger={danger} rotation={rotation} seconds={seconds} spinning={spinning} glow={glow} />
       </div>
 
