@@ -54,6 +54,11 @@ const RPC_ERROR_HTTP: Record<RpcErrorCode, { status: number; message: string }> 
   NO_SAFE_TILE: { status: 400, message: "ต้องเปิดหีบปลอดภัยอย่างน้อย 1 ใบก่อนจึงรับเหรียญได้ค่ะ" },
   INVALID_SLICE: { status: 400, message: "คำขอไม่ถูกต้อง" },
   NO_LEVEL_CLEARED: { status: 400, message: "ต้องหมุนผ่านอย่างน้อย 1 ชั้นก่อนจึงรับเหรียญได้ค่ะ" },
+  DAILY_LIMIT_REACHED: { status: 429, message: "วันนี้เล่นจับคู่ภาพเหมือนครบจำนวนรอบแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
+  STALE_ROUND_STATE: { status: 409, message: "หน้าจอยังไม่อัปเดตค่ะ กำลังดึงข้อมูลรอบล่าสุดให้" },
+  CARD_ALREADY_OPEN: { status: 409, message: "ไพ่ใบนี้เปิดอยู่แล้วค่ะ เลือกอีกใบหนึ่งนะคะ" },
+  CARD_ALREADY_MATCHED: { status: 409, message: "ไพ่ใบนี้จับคู่ได้แล้วค่ะ" },
+  INVALID_LAYOUT: { status: 400, message: "คำขอไม่ถูกต้อง" },
   NOTHING_TO_RESET: { status: 409, message: "ผู้เล่นคนนี้ยังไม่ได้เล่นวันนี้ จึงไม่มีสิทธิ์ที่ต้องรีเซ็ต" },
   ALREADY_PLAYED_TODAY: { status: 409, message: "วันนี้คุณเล่นน้องเหมียว 9 ชีวิตไปแล้วค่ะ กลับมาเล่นใหม่ได้หลังเที่ยงคืน (เวลาไทย) ไม่มีการหักเหรียญ" },
 };

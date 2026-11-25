@@ -37,7 +37,10 @@ export type LedgerReason =
   | "mystic_bet"
   | "mystic_win"
   | "power_bet"
-  | "power_win";
+  | "power_win"
+  | "match_bet"
+  | "match_win"
+  | "match_bonus";
 
 export type Database = {
   public: {
@@ -250,6 +253,27 @@ export type Database = {
           level: number;
           status: "active" | "cashed" | "lost" | "cleared";
           payout: number;
+          created_at: Timestamp;
+          finished_at: Timestamp | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      match_game_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          /** Bangkok date the round was started (the daily limit) */
+          play_date: string;
+          /** hidden card layout — service role only */
+          layout: number[];
+          matched: number;
+          first_pick: number | null;
+          turns_used: number;
+          pairs: number;
+          payout: number;
+          status: "active" | "finished";
           created_at: Timestamp;
           finished_at: Timestamp | null;
         };
@@ -470,6 +494,18 @@ export type Database = {
         Args: { p_user_id: string; p_round_id: string };
         Returns: Json;
       };
+      match_view: {
+        Args: { p_round_id: string };
+        Returns: Json; // round view without the hidden layout
+      };
+      match_start: {
+        Args: { p_user_id: string; p_layout: number[] };
+        Returns: Json;
+      };
+      match_flip: {
+        Args: { p_user_id: string; p_round_id: string; p_position: number; p_step: number };
+        Returns: Json;
+      };
       power_start: {
         Args: { p_user_id: string; p_bet: number };
         Returns: Json; // round view
@@ -600,6 +636,11 @@ export const RPC_ERRORS = [
   "NO_SAFE_TILE",
   "INVALID_SLICE",
   "NO_LEVEL_CLEARED",
+  "DAILY_LIMIT_REACHED",
+  "STALE_ROUND_STATE",
+  "CARD_ALREADY_OPEN",
+  "CARD_ALREADY_MATCHED",
+  "INVALID_LAYOUT",
 ] as const;
 export type RpcErrorCode = (typeof RPC_ERRORS)[number];
 

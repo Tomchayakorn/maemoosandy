@@ -4,7 +4,7 @@ import type { Database } from "@/types/database";
 import { isSupabaseConfigured, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./config";
 
 /** Pages that need a signed-in user. API routes check auth themselves. */
-const PROTECTED_PREFIXES = ["/tarot", "/birthdate", "/topup", "/lucky-wheel", "/lucky-card", "/cat-game", "/mystic-chests", "/power-wheel", "/history", "/withdraw", "/admin"];
+const PROTECTED_PREFIXES = ["/tarot", "/birthdate", "/topup", "/lucky-wheel", "/lucky-card", "/cat-game", "/mystic-chests", "/power-wheel", "/match-game", "/history", "/withdraw", "/admin"];
 
 /**
  * Refreshes the Supabase auth session cookie on every request and does an

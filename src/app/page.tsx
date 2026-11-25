@@ -120,6 +120,20 @@ export default function Home() {
           }
           icon={<span className="text-4xl leading-none">⚡</span>}
         />
+        <ServiceCard
+          index={7}
+          href="/match-game"
+          badge="🎴 เกมใหม่"
+          badgeTone="violet"
+          title="จับคู่ภาพเหมือน ฝึกจิตเสริมดวง"
+          description="เปิดไพ่ทีละ 2 ใบ หาคู่สัญลักษณ์มงคลให้ครบ 6 คู่ใน 12 เทิร์น คู่ละ +5 เหรียญ ครบกระดานโบนัส +15 เหรียญ"
+          price={
+            <span className="inline-flex items-center gap-1">
+              <CoinIcon className="size-4" /> {formatCoins(20)} เหรียญ / รอบ · วันละ 3 รอบ
+            </span>
+          }
+          icon={<span className="text-4xl leading-none">🎴</span>}
+        />
       </section>
 
       <section className="mt-8 px-4">

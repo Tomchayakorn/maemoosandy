@@ -665,3 +665,78 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
     will-change: auto;
   }
 }
+
+/* ---------- จับคู่ภาพเหมือน: deep violet panels with champagne-gold edges, and soft light only when a pair / the whole board is found ---------- */
+.match-panel {
+  border: 1px solid rgb(232 206 150 / 0.42);
+  background: linear-gradient(160deg, rgb(44 28 78 / 0.92), rgb(18 12 38 / 0.94));
+  box-shadow:
+    inset 0 1px 0 rgb(255 236 190 / 0.12),
+    0 8px 22px -14px rgb(139 92 246 / 0.75);
+}
+/* the board: slightly see-through, so the light behind it shows between the cards */
+.match-frame {
+  border: 1px solid rgb(232 206 150 / 0.55);
+  background: linear-gradient(170deg, rgb(48 30 84 / 0.58), rgb(16 11 34 / 0.7));
+  box-shadow:
+    inset 0 0 0 3px rgb(18 12 38 / 0.45),
+    inset 0 0 0 4px rgb(232 206 150 / 0.18),
+    0 0 34px -14px rgb(168 85 247 / 0.75);
+  transition: border-color 600ms ease;
+}
+.match-cleared {
+  border-color: rgb(243 217 139 / 0.95);
+}
+/* light that appears once and fades: only opacity / transform move */
+.match-flash,
+.match-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+.match-flash-pair {
+  box-shadow:
+    0 0 24px 3px rgb(243 217 139 / 0.5),
+    inset 0 0 28px rgb(243 217 139 / 0.2);
+  animation: match-flash 1000ms ease-out 280ms both;
+}
+.match-flash-clear {
+  box-shadow:
+    0 0 34px 6px rgb(243 217 139 / 0.62),
+    inset 0 0 40px rgb(216 180 254 / 0.28);
+  animation: match-flash-clear 2200ms ease-in-out 280ms both;
+}
+.match-ring {
+  border: 2px solid rgb(255 236 190 / 0.9);
+  border-radius: 1rem;
+  box-shadow: 0 0 14px rgb(243 217 139 / 0.7);
+  animation: match-ring 800ms ease-out 280ms both;
+}
+@keyframes match-flash {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes match-flash-clear {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  45% { opacity: 0.45; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes match-ring {
+  0% { opacity: 0; transform: scale(0.96); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .match-flash,
+  .match-ring {
+    display: none;
+  }
+  .match-frame {
+    transition: none;
+  }
+}
