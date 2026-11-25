@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { bgm } from "@/lib/audio/bgm";
-import { CANCEL_SETTLE_MS, cancelSpeech, getThaiVoices, isBasicVoice, speechBusy, speechSupported, waitForThaiVoice } from "./speech";
+import { CANCEL_SETTLE_MS, cancelSpeech, getThaiVoices, isBasicVoice, speechSupported, waitForThaiVoice } from "./speech";
 import { toSpeechPhrases } from "./thai-text";
 
 /**
@@ -55,7 +55,7 @@ export function useReadAloud(text: string) {
    * Speak the reading with one voice. Resolves once the outcome of the START is known (speech then continues on its own):
    *  "started" · "dropped" (the engine silently ignored it) · "refused" (not-allowed) · {error} (the voice errored) · "stalled" · "stale".
    */
-  function speakWith(voice: SpeechSynthesisVoice | null, phrases: ReturnType<typeof toSpeechPhrases>, run: number): Promise<"started" | "dropped" | "refused" | "stalled" | "stale" | { error: string }> {
+  function speakWith(voice: SpeechSynthesisVoice | null, phrases: ReturnType<typeof toSpeechPhrases>, run: number, classic: boolean): Promise<"started" | "dropped" | "refused" | "stalled" | "stale" | { error: string }> {
     return new Promise((resolve) => {
       let started = false;
       let settled = false;
@@ -66,7 +66,8 @@ export function useReadAloud(text: string) {
         resolve(v);
       };
       // Feed the engine a few phrases at a time instead of queueing 100+ utterances at once (mobile engines choke on a long queue).
-      const BATCH = 4;
+      // classic = exactly how the reading was spoken when it worked: every phrase queued at once. Otherwise a few at a time.
+      const BATCH = classic ? phrases.length : 4;
       let next = 0;
       const makeUtterance = (i: number) => {
         const phrase = phrases[i];
@@ -124,12 +125,10 @@ export function useReadAloud(text: string) {
       }
       const run = ++runRef.current;
       // 1) clear any old queue (and a leftover pause) so the new reading never waits behind it
-      const hadOldQueue = speechBusy();
       cancelSpeech();
       setStatus("loading");
       setErrorCode(null);
-      // 2) let the cancel settle (only when something was actually cancelled)
-      if (hadOldQueue) await sleep(CANCEL_SETTLE_MS);
+      // 2) (no extra wait here: finding the voices below already gives the cancel time to settle)
       if (run !== runRef.current) return;
       // 3) find Thai voices (the list can fill late on mobile)
       if (!(await waitForThaiVoice())) {
@@ -152,7 +151,7 @@ export function useReadAloud(text: string) {
         for (let attempt = 0; attempt < 2; attempt++) {
           if (run !== runRef.current) return;
           if (voice) setBasicVoice(isBasicVoice(voice));
-          const outcome = await speakWith(voice, phrases, run);
+          const outcome = await speakWith(voice, phrases, run, attempt === 0);
           if (outcome === "stale" || outcome === "started") return;
           if (outcome === "dropped" && !fromTap) {
             // an automatic start the browser ignored: ask for a tap instead of trying other voices
