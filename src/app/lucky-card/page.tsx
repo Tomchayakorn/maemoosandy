@@ -6,6 +6,7 @@ import { LuckyCardRules } from "@/components/rules/LuckyCardRules";
 import { CatSurpriseHost } from "@/components/cat-game/CatSurpriseHost";
 import { RulesGate } from "@/components/rules/RulesGate";
 import { LuckyCardGame } from "@/components/lucky-card/LuckyCardGame";
+import { AuraBackdrop } from "@/components/lucky-card/aura/AuraBackdrop";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getMyWallet } from "@/lib/wallet";
 
@@ -17,6 +18,8 @@ export const metadata: Metadata = {
 export default function LuckyCardPage() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 pb-32 pt-8">
+      {/* decorative 3D aura and gold dust: fixed behind the page, takes no touches */}
+      <AuraBackdrop />
       <header className="flex flex-col items-center gap-1.5 text-center">
         <p className="font-serif text-xs tracking-[0.25em] text-gold/90">✦ เปิดไพ่ลุ้นโชค ✦</p>
         <h1 className="font-display text-4xl leading-snug">
