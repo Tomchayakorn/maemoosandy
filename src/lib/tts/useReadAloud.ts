@@ -143,8 +143,7 @@ export function useReadAloud(text: string) {
         return;
       }
 
-      // 4) try the voices best-first until one starts; a slow start is waited for, a failed one is retried once (after a longer pause,
-      //    a speak() right after an error often fails again) and then skipped. Last resort: the browser's own default Thai voice.
+      // 4) try the voices best-first until one starts; a slow start is waited for, a failed one is skipped (a synthesis-failed ends the round at once). Last resort: the browser's own default Thai voice.
       let lastError = "no-sound";
       const candidates: (SpeechSynthesisVoice | null)[] = [...voices, null];
       for (const voice of candidates) {
@@ -159,10 +158,16 @@ export function useReadAloud(text: string) {
             setStatus("blocked");
             return;
           }
+          if (typeof outcome === "object" && outcome.error === "synthesis-failed") {
+            // the device's engine can't speak: stop right here (no more speechSynthesis calls this round, no error box); the normal play button stays
+            cancelSpeech();
+            if (run === runRef.current) setStatus("idle");
+            return;
+          }
           lastError = typeof outcome === "string" ? (outcome === "refused" ? "not-allowed" : outcome) : outcome.error;
           cancelSpeech();
           await sleep(attempt === 0 ? RETRY_PAUSE_MS : CANCEL_SETTLE_MS);
-          if (typeof outcome === "string" || outcome.error !== "synthesis-failed") break; // only a synthesis failure is worth one more try
+          break;
         }
       }
       if (run === runRef.current) {
