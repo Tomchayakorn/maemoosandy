@@ -373,7 +373,17 @@ export function TarotExperience({
               <ReadingCard
                 ref={shareRef}
                 title="คำทำนายจากแม่มู"
-                subtitle={<>&ldquo;{trimmed}&rdquo;</>}
+                subtitle={
+                  <>
+                    &ldquo;{trimmed}&rdquo;
+                    {result.asOf && (
+                      <>
+                        <br />
+                        <span data-testid="as-of">อ่านไพ่ตามเวลา {result.asOf}</span>
+                      </>
+                    )}
+                  </>
+                }
                 header={
                   <div className="grid grid-cols-3 gap-3">
                     {result.cards.map((card) => (

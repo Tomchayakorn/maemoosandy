@@ -1,13 +1,17 @@
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { generateReading, isAiConfigured } from "@/lib/ai/engine";
 import { MAE_MU_SANDY_SYSTEM } from "@/lib/ai/persona";
+import { thaiNow } from "@/lib/astrology/now-th";
+import { pickTarotVariety } from "@/lib/astrology/variety";
 import { FORTUNE_PRICES } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { drawThree } from "@/lib/tarot/draw";
-import type { DrawnCardView, TarotResponse } from "@/lib/tarot/deck";
+import type { TarotResponse } from "@/lib/tarot/deck";
+import { buildTarotPrompt } from "@/lib/tarot/prompt";
 
 // Claude: up to 75s plus one SDK retry; Gemini: up to three models × 25s.
 export const maxDuration = 120;
@@ -20,28 +24,6 @@ const bodySchema = z.object({
     .max(300, "คำถามยาวเกินไป ขอไม่เกิน 300 ตัวอักษรค่ะ"),
   useFreeTicket: z.boolean().optional().default(false),
 });
-
-function buildPrompt(question: string, cards: DrawnCardView[]): string {
-  const lines = cards.map(
-    (c, i) =>
-      `${i + 1}. ตำแหน่ง "${c.position}": ${c.nameTh}${c.isReversed ? " — ไพ่กลับหัว" : " — ไพ่หัวตั้ง"}\n   ความหมายหลัก: ${c.meaning}`,
-  );
-  return `ผู้ถามตั้งจิตอธิษฐานแล้วเปิดไพ่ยิปซี 3 ใบ (อดีต · ปัจจุบัน · อนาคต)
-
-<question>${question}</question>
-
-ไพ่ที่เปิดได้:
-${lines.join("\n")}
-
-ช่วยทำนายให้ตรงกับคำถาม โดยมีหัวข้อดังนี้
-## ภาพรวมของคำถาม
-## อดีต: ${cards[0].nameTh.replace(/\s*\(.*\)$/, "")}
-## ปัจจุบัน: ${cards[1].nameTh.replace(/\s*\(.*\)$/, "")}
-## อนาคต: ${cards[2].nameTh.replace(/\s*\(.*\)$/, "")}
-## คำตอบจากแม่มู (สรุปคำตอบของคำถามอย่างตรงไปตรงมา)
-## คำแนะนำเสริมดวงจากแม่มู
-ความยาวรวมประมาณ 350-500 คำ`;
-}
 
 export async function POST(request: Request) {
   const { user, response: unauthorized } = await requireUser();
@@ -68,9 +50,14 @@ export async function POST(request: Request) {
 
   // 2) Draw on the server, 3) ask Mae Mu Sandy.
   const cards = drawThree();
+  // The moment of the reading comes from the SERVER clock (never from the client): the cards are read for this date and time.
+  const asOfDate = new Date();
   let reading: string;
   try {
-    reading = await generateReading({ system: MAE_MU_SANDY_SYSTEM, prompt: buildPrompt(body.question, cards) });
+    reading = await generateReading({
+      system: MAE_MU_SANDY_SYSTEM,
+      prompt: buildTarotPrompt(body.question, cards, { now: asOfDate, variety: pickTarotVariety((n) => randomInt(n)) }),
+    });
   } catch (err) {
     console.error("tarot: AI generation failed", err);
     const refund = await admin.rpc("refund_coins", { p_ledger_id: ledgerId });
@@ -109,5 +96,6 @@ export async function POST(request: Request) {
     balance: wallet?.balance ?? 0,
     freeReadingTickets: wallet?.free_reading_tickets ?? 0,
     usedFreeTicket: body.useFreeTicket,
-  });
+    asOf: thaiNow(asOfDate).label,
+  }, { headers: { "Cache-Control": "no-store" } }); // a reading belongs to its moment: never cached
 }

@@ -124,6 +124,8 @@ export type TarotResponse = {
   balance: number;
   freeReadingTickets: number;
   usedFreeTicket: boolean;
+  /** the Thai date and time (server clock) the cards were read for, e.g. "วันศุกร์ที่ 27 พฤศจิกายน พ.ศ. 2569 เวลา 14:05 น. (ช่วงบ่าย)" */
+  asOf?: string;
 };
 
 /** Short Thai name without the English part in parentheses. */
