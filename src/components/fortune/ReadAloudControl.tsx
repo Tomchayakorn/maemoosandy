@@ -44,7 +44,7 @@ export function ReadAloudControl({ text }: { text: string }) {
         <p>อุปกรณ์นี้ยังไม่มีเสียงอ่านภาษาไทย — เพิ่มเสียงภาษาไทยในการตั้งค่าเครื่องแล้วลองใหม่ได้นะคะ</p>
         <button
           type="button"
-          onClick={() => void play(true)}
+          onClick={() => play()}
           data-testid="read-aloud-retry"
           className="h-10 rounded-full border border-gold/50 px-5 text-sm text-gold-light transition hover:bg-gold/10"
         >
@@ -63,7 +63,7 @@ export function ReadAloudControl({ text }: { text: string }) {
         </p>
         <button
           type="button"
-          onClick={() => void play(true)}
+          onClick={() => play()}
           data-testid="read-aloud-retry"
           className="h-10 rounded-full border border-gold/50 px-5 text-sm text-gold-light transition hover:bg-gold/10"
         >
@@ -91,7 +91,7 @@ export function ReadAloudControl({ text }: { text: string }) {
   function handleMain() {
     if (speaking) pause();
     else if (status === "paused") resume();
-    else void play(true);
+    else play();
   }
 
   const bar = (

@@ -35,7 +35,7 @@ export function scoreThaiVoice(voice: Pick<SpeechSynthesisVoice, "name" | "local
   return score;
 }
 
-/** Every Thai voice on this device, best first (ties keep the device's own order). Used to fall back to the next voice when one fails. */
+/** Every Thai voice on this device, best first (ties keep the device's own order). */
 export function getThaiVoices(): SpeechSynthesisVoice[] {
   if (!speechSupported()) return [];
   const thai = window.speechSynthesis.getVoices().filter(isThai);
@@ -50,20 +50,6 @@ export function getThaiVoice(): SpeechSynthesisVoice | null {
 /** True when the chosen voice is one of the basic, robotic-sounding ones. */
 export function isBasicVoice(voice: SpeechSynthesisVoice): boolean {
   return scoreThaiVoice(voice) < 50;
-}
-
-/** Voices load asynchronously in Chrome; wait until the list is populated (or give up). */
-export function waitForVoices(timeoutMs = 2000): Promise<void> {
-  if (!speechSupported() || window.speechSynthesis.getVoices().length > 0) return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", done);
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(done, timeoutMs);
-    window.speechSynthesis.addEventListener("voiceschanged", done);
-  });
 }
 
 /**
@@ -105,9 +91,6 @@ export function unlockSpeech(): void {
   silent.volume = 0;
   window.speechSynthesis.speak(silent);
 }
-
-/** Time to let a cancel settle before speaking again: Chrome on Android drops a speak() issued right after cancel(). */
-export const CANCEL_SETTLE_MS = 250;
 
 /** True when the engine still holds something (speaking, queued or paused) that a new reading would have to clear first. */
 export function speechBusy(): boolean {
