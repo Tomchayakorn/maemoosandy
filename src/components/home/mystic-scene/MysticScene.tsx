@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { lookAtHeight, orbitPose, pixelRatioFor } from "./camera";
+import { LOGO_CENTER_FALLBACK_PX, lookAtHeight, orbitPose, pixelRatioFor, tallness } from "./camera";
 import type { MysticSceneHandle } from "./createScene";
 
 /** About 30 drawn frames a second: plenty for slow background motion, and half the work on the phone. */
@@ -45,11 +45,21 @@ export function MysticScene() {
     let sampleStart = 0;
     let sampleCount = 0;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let logoNdc = 0.45;
+
+    // where the hero logo's centre is when the page is at the top (offsets ignore its floating animation and the scroll position)
+    const measureLogo = () => {
+      let el = document.querySelector<HTMLElement>("[data-hero-emblem]");
+      let centre = el ? el.offsetHeight / 2 : LOGO_CENTER_FALLBACK_PX;
+      for (; el; el = el.offsetParent as HTMLElement | null) centre += el.offsetTop;
+      logoNdc = 1 - (2 * centre) / Math.max(layer.clientHeight, 1);
+    };
 
     const draw = () => {
       if (!scene || lost) return;
       const aspect = layer.clientWidth / Math.max(layer.clientHeight, 1);
-      scene.render(time, orbitPose(time, aspect), lookAtHeight(aspect));
+      // on tall (phone) screens the ball and its rings rise to hang behind the logo
+      scene.render(time, orbitPose(time, aspect), lookAtHeight(aspect), { ndcY: logoNdc, amount: tallness(aspect) });
       frames++;
     };
     const tick = (now: number) => {
@@ -86,6 +96,7 @@ export function MysticScene() {
       const w = layer.clientWidth;
       const h = layer.clientHeight;
       if (!scene || !w || !h) return;
+      measureLogo();
       scene.setSize(w, h, pixelRatioFor(window.devicePixelRatio, w, slow));
       draw();
     };
@@ -108,6 +119,12 @@ export function MysticScene() {
     // the layer is as tall as the largest viewport (lvh), so a phone's collapsing address bar does not resize the canvas mid-scroll
     const sizes = new ResizeObserver(resize);
     sizes.observe(layer);
+    // the logo moves down when something above it arrives late (the toolbar streams in), which changes the page height
+    const page = new ResizeObserver(() => {
+      measureLogo();
+      if (!raf) draw();
+    });
+    page.observe(document.body);
 
     void import("./createScene")
       .then(({ createMysticScene }) => {
@@ -124,7 +141,7 @@ export function MysticScene() {
       });
 
     // for checking in the browser console
-    const debug = () => ({ running: raf !== 0, frames, time: +time.toFixed(2), slow, ...scene?.stats() });
+    const debug = () => ({ running: raf !== 0, frames, time: +time.toFixed(2), slow, logoNdc: +logoNdc.toFixed(3), ...scene?.stats() });
     (window as unknown as { __mysticScene?: typeof debug }).__mysticScene = debug;
 
     return () => {
@@ -132,6 +149,7 @@ export function MysticScene() {
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
       sizes.disconnect();
+      page.disconnect();
       document.removeEventListener("visibilitychange", sync);
       motion.removeEventListener("change", sync);
       canvas.removeEventListener("webglcontextlost", onLost);

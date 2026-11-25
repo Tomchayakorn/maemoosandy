@@ -26,6 +26,7 @@ export function Hero() {
       />
 
       <motion.div
+        data-hero-emblem // the 3D backdrop hangs its crystal ball behind this
         className="mx-auto mb-5 w-fit"
         {...(reduce
           ? {}

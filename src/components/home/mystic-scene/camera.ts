@@ -6,6 +6,10 @@
  */
 
 export const TARGET_HEIGHT = 1.55;
+/** Vertical field of view of the camera, degrees. */
+export const FOV = 40;
+/** Where the logo's centre sits on a phone when it cannot be measured (px from the top of the page). */
+export const LOGO_CENTER_FALLBACK_PX = 224;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -35,6 +39,26 @@ export function orbitPose(t: number, aspect: number): { x: number; y: number; z:
     y: TARGET_HEIGHT + Math.sin(pitch) * r,
     z: Math.cos(yaw) * Math.cos(pitch) * r,
   };
+}
+
+/**
+ * The height at which a point on the scene's centre line (x = 0, z = 0) appears at `ndcY` on screen (1 = top edge, 0 = middle, −1 = bottom),
+ * for a camera at `eye` looking at height `lookY`. Used to hang the crystal ball exactly behind the logo, whatever the screen size.
+ */
+export function heightAtScreen(eye: { x: number; y: number; z: number }, lookY: number, ndcY: number, fov = FOV): number {
+  // camera axes: forward towards the look-at point, up perpendicular to it in the vertical plane
+  const flat = Math.hypot(eye.x, eye.z);
+  const rise = lookY - eye.y;
+  const length = Math.hypot(flat, rise);
+  const fy = rise / length;
+  const fFlat = -flat / length; // along the horizontal direction pointing from the centre line to the camera
+  const uy = -fFlat;
+  const uFlat = fy;
+  const k = ndcY * Math.tan((fov * Math.PI) / 360);
+  // the point (0, y, 0) seen from the camera: horizontal offset −flat, vertical offset y − eye.y
+  const up = -flat * uFlat - eye.y * uy;
+  const forward = -flat * fFlat - eye.y * fy;
+  return (k * forward - up) / (uy - k * fy);
 }
 
 /** Render resolution of the backdrop (it sits dimmed behind the page): at most 1.25 on phones, 1.5 on larger screens; 1 when slow. */

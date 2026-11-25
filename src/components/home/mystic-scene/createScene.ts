@@ -50,6 +50,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import { FOV, heightAtScreen } from "./camera";
 
 const NIGHT = 0x120726;
 const PURPLE = 0x4a2388;
@@ -61,10 +62,21 @@ const FLAME = 0xffa23d;
 
 const ZODIAC = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"];
 
+/** Raises the crystal ball and its rings to a point of the screen (the logo on phones); the altar, candles and pillars stay put. */
+export type Lift = {
+  /** Where the ball's centre should appear: 1 = top edge, 0 = middle, −1 = bottom. */
+  ndcY: number;
+  /** 0 = in its place over the altar, 1 = fully raised (tall screens). */
+  amount: number;
+};
+
+/** Height of the ball when it floats over the altar. */
+const ALTAR_HEIGHT = 2.1;
+
 export type MysticSceneHandle = {
   setSize(width: number, height: number, pixelRatio: number): void;
   /** Draw the scene at time `t` (seconds) seen from `eye`, looking at height `lookY` above the centre. */
-  render(t: number, eye: { x: number; y: number; z: number }, lookY: number): void;
+  render(t: number, eye: { x: number; y: number; z: number }, lookY: number, lift?: Lift): void;
   stats(): { calls: number; triangles: number; pixelRatio: number };
   dispose(): void;
 };
@@ -98,7 +110,7 @@ export function createMysticScene(canvas: HTMLCanvasElement): MysticSceneHandle 
   const scene = new Scene();
   const fog = new Fog(NIGHT, 11, 24); // near / far follow the camera distance in render()
   scene.fog = fog;
-  const camera = new PerspectiveCamera(40, 1, 0.1, 60);
+  const camera = new PerspectiveCamera(FOV, 1, 0.1, 60);
   const lookAt = new Vector3();
   const textures: Texture[] = [];
   const animate: ((t: number) => void)[] = [];
@@ -231,11 +243,16 @@ export function createMysticScene(canvas: HTMLCanvasElement): MysticSceneHandle 
   scene.add(orb);
   const pink = new Color(PINK);
   const sky = new Color(SKY);
+  /** Resting height of the ball and how far it is raised, set before each frame. */
+  let ballHome = ALTAR_HEIGHT;
+  let raised = 0;
   /** Slow double-sine float, shared (with a small delay) by the rings so they trail the ball. */
-  const floatY = (t: number) => 2.1 + Math.sin(t * 0.85) * 0.11 + Math.sin(t * 0.41 + 1) * 0.035;
+  const float = (t: number) => Math.sin(t * 0.85) * 0.11 + Math.sin(t * 0.41 + 1) * 0.035;
+  const floatY = (t: number) => ballHome + float(t);
   animate.push((t) => {
     const y = floatY(t);
     orb.position.y = y;
+    orb.scale.setScalar(1 + raised * 0.35); // a little larger when raised, so it glows round the logo
     ball.rotation.y = facets.rotation.y = t * 0.2;
     ball.rotation.x = facets.rotation.x = Math.sin(t * 0.23) * 0.2;
     cage.rotation.set(Math.sin(t * 0.27) * 0.9 + t * 0.12, t * 0.3, Math.sin(t * 0.19) * 0.5);
@@ -245,13 +262,13 @@ export function createMysticScene(canvas: HTMLCanvasElement): MysticSceneHandle 
     const mix = 0.5 + Math.sin(t * 0.38) * 0.5;
     glass.emissive.copy(pink).lerp(sky, mix);
     halo.material.color.copy(glass.emissive);
-    halo.material.opacity = 0.55 + Math.sin(t * 1.15) * 0.09;
+    halo.material.opacity = (0.55 + Math.sin(t * 1.15) * 0.09) * (1 - raised * 0.4); // softer next to the title
     ballLight.color.copy(glass.emissive);
-    ballLight.position.set(0, y, 0.3);
+    ballLight.position.set(0, ALTAR_HEIGHT + float(t), 0.3); // the light stays over the altar, so the room is lit as before
   });
 
   /* ───────── astral rings ───────── */
-  const orbitRing = (radius: number, tube: number, material: Material, tilt: [number, number, number], speed: number, beads: number) => {
+  const orbitRing = (radius: number, tube: number, material: Material, tilt: [number, number, number], speed: number, beads: number, grow = 0) => {
     const tilted = new Group();
     tilted.rotation.set(...tilt);
     const spin = new Group(); // spins inside its own tilted plane
@@ -270,14 +287,15 @@ export function createMysticScene(canvas: HTMLCanvasElement): MysticSceneHandle 
     animate.push((t) => {
       spin.rotation.y = t * speed;
       tilted.position.y = floatY(t - 0.55);
+      tilted.scale.setScalar(1 + raised * grow);
       // a slow two-axis wobble, like a gyroscope settling
       tilted.rotation.x = tilt[0] + Math.sin(t * 0.21 + radius * 2) * 0.07;
       tilted.rotation.z = tilt[2] + Math.sin(t * 0.17 + radius) * 0.1;
     });
     return spin;
   };
-  orbitRing(1.42, 0.022, gold, [0.45, 0, 0.35], 0.6, 3);
-  orbitRing(1.8, 0.012, neonSky, [-0.85, 0, -0.3], -0.45, 2);
+  orbitRing(1.42, 0.022, gold, [0.45, 0, 0.35], 0.6, 3, 0.18);
+  orbitRing(1.8, 0.012, neonSky, [-0.85, 0, -0.3], -0.45, 2, 0.15);
   const zodiacSpin = orbitRing(2.55, 0.013, neonPink, [0.2, 0, -0.1], 0.17, 0);
 
   ZODIAC.forEach((sign, i) => {
@@ -487,7 +505,9 @@ export function createMysticScene(canvas: HTMLCanvasElement): MysticSceneHandle 
       camera.aspect = width / Math.max(height, 1);
       camera.updateProjectionMatrix();
     },
-    render(t, eye, lookY) {
+    render(t, eye, lookY, lift) {
+      raised = lift?.amount ?? 0;
+      ballHome = raised ? ALTAR_HEIGHT + (heightAtScreen(eye, lookY, lift!.ndcY) - ALTAR_HEIGHT) * raised : ALTAR_HEIGHT;
       for (const step of animate) step(t);
       camera.position.set(eye.x, eye.y, eye.z);
       camera.lookAt(lookAt.set(0, lookY, 0));
