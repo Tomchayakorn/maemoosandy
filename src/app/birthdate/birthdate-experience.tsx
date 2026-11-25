@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { CompassBackdrop } from "@/components/birthdate/compass/CompassBackdrop";
 import { CrystalBallLoader } from "@/components/fx/CrystalBallLoader";
 import { goldCelebration } from "@/components/fx/confetti";
 import { BirthProfileSummary } from "@/components/fortune/BirthProfileSummary";
@@ -158,255 +159,259 @@ export function BirthdateExperience({
   }
 
   return (
-    <AnimatePresence mode="wait">
-      {/* ---------------- FORM ---------------- */}
-      {phase === "form" && (
-        <motion.section
-          key="form"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          className="flex flex-col gap-5"
-        >
-          <div className="flex h-[30svh] min-h-40 items-end justify-center">
-            <p className="on-photo rounded-full border border-gold/30 bg-velvet/45 px-4 py-1.5 font-serif text-sm text-gold-light backdrop-blur-sm">
-              ✦ บอกชื่อและวันเกิด แล้วแม่มูจะถอดรหัสให้ค่ะ ✦
-            </p>
-          </div>
+    <>
+      {/* decorative 3D zodiac / ทักษา compass behind the page; the phase only changes its pace and light */}
+      <CompassBackdrop mood={phase} />
+      <AnimatePresence mode="wait">
+        {/* ---------------- FORM ---------------- */}
+        {phase === "form" && (
+          <motion.section
+            key="form"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="flex flex-col gap-5"
+          >
+            <div data-compass-spacer className="flex h-[30svh] min-h-40 items-end justify-center">
+              <p className="on-photo rounded-full border border-gold/30 bg-velvet/45 px-4 py-1.5 font-serif text-sm text-gold-light backdrop-blur-sm">
+                ✦ บอกชื่อและวันเกิด แล้วแม่มูจะถอดรหัสให้ค่ะ ✦
+              </p>
+            </div>
 
-          <MysticCard className="p-5 shadow-[0_-20px_60px_-10px_rgb(0_0_0/0.8)]">
-            <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-              <div className="grid grid-cols-2 gap-3">
-                <label className={labelClass}>
-                  ชื่อจริง
-                  <input
-                    value={firstName}
-                    onChange={(e) => edit(setFirstName)(e.target.value.slice(0, 60))}
-                    autoComplete="given-name"
-                    placeholder="เช่น สมชาย"
-                    className={inputClass}
-                  />
-                </label>
-                <label className={labelClass}>
-                  นามสกุล
-                  <input
-                    value={lastName}
-                    onChange={(e) => edit(setLastName)(e.target.value.slice(0, 60))}
-                    autoComplete="family-name"
-                    placeholder="เช่น ใจดี"
-                    className={inputClass}
-                  />
-                </label>
-              </div>
+            <MysticCard className="p-5 shadow-[0_-20px_60px_-10px_rgb(0_0_0/0.8)]">
+              <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className={labelClass}>
+                    ชื่อจริง
+                    <input
+                      value={firstName}
+                      onChange={(e) => edit(setFirstName)(e.target.value.slice(0, 60))}
+                      autoComplete="given-name"
+                      placeholder="เช่น สมชาย"
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    นามสกุล
+                    <input
+                      value={lastName}
+                      onChange={(e) => edit(setLastName)(e.target.value.slice(0, 60))}
+                      autoComplete="family-name"
+                      placeholder="เช่น ใจดี"
+                      className={inputClass}
+                    />
+                  </label>
+                </div>
 
-              {preview && (
-                <p className="-mt-1 text-center text-xs text-cream-muted">
-                  ผลรวมเลขศาสตร์ชื่อ-สกุล{" "}
-                  <span className="font-tarot text-sm font-bold text-gold-light">
-                    {preview.f} + {preview.l} = {preview.total}
+                {preview && (
+                  <p className="-mt-1 text-center text-xs text-cream-muted">
+                    ผลรวมเลขศาสตร์ชื่อ-สกุล{" "}
+                    <span className="font-tarot text-sm font-bold text-gold-light">
+                      {preview.f} + {preview.l} = {preview.total}
+                    </span>
+                  </p>
+                )}
+
+                <fieldset className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <legend className="text-sm text-cream-muted">วัน / เดือน / ปีเกิด</legend>
+                    <div role="radiogroup" aria-label="ปฏิทิน" className="flex rounded-full border border-gold/30 bg-velvet/60 p-0.5 text-xs">
+                      {(["BE", "CE"] as const).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          role="radio"
+                          aria-checked={calendar === c}
+                          onClick={() => edit(setCalendar)(c)}
+                          className={`rounded-full px-3 py-1 transition ${
+                            calendar === c ? "bg-[linear-gradient(135deg,var(--gold-light),var(--gold))] text-velvet" : "text-cream-muted"
+                          }`}
+                        >
+                          {c === "BE" ? "พ.ศ." : "ค.ศ."}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_1.6fr_1.3fr] gap-2">
+                    <select aria-label="วันที่" value={day} onChange={(e) => edit(setDay)(e.target.value)} className={inputClass}>
+                      <option value="">วัน</option>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {i + 1}
+                        </option>
+                      ))}
+                    </select>
+                    <select aria-label="เดือน" value={month} onChange={(e) => edit(setMonth)(e.target.value)} className={inputClass}>
+                      <option value="">เดือน</option>
+                      {THAI_MONTHS.map((m, i) => (
+                        <option key={m} value={i + 1}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      aria-label={calendar === "BE" ? "ปีเกิด พ.ศ." : "ปีเกิด ค.ศ."}
+                      value={year}
+                      onChange={(e) => edit(setYear)(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      inputMode="numeric"
+                      placeholder={calendar === "BE" ? "2533" : "1990"}
+                      className={inputClass}
+                    />
+                  </div>
+                </fieldset>
+
+                <label className={labelClass}>
+                  <span>
+                    เวลาเกิด <span className="text-xs text-cream-muted/70">(ไม่บังคับ — ใช้ดูพุธกลางวัน/กลางคืน)</span>
                   </span>
-                </p>
-              )}
+                  <input type="time" value={birthTime} onChange={(e) => edit(setBirthTime)(e.target.value)} className={inputClass} />
+                </label>
 
-              <fieldset className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <legend className="text-sm text-cream-muted">วัน / เดือน / ปีเกิด</legend>
-                  <div role="radiogroup" aria-label="ปฏิทิน" className="flex rounded-full border border-gold/30 bg-velvet/60 p-0.5 text-xs">
-                    {(["BE", "CE"] as const).map((c) => (
+                <fieldset className="flex flex-col gap-1.5">
+                  <legend className="mb-1.5 text-sm text-cream-muted">เรื่องที่อยากให้แม่มูเน้น</legend>
+                  <div role="radiogroup" className="grid grid-cols-3 gap-2">
+                    {FOCUS_OPTIONS.map((f) => (
                       <button
-                        key={c}
+                        key={f}
                         type="button"
                         role="radio"
-                        aria-checked={calendar === c}
-                        onClick={() => edit(setCalendar)(c)}
-                        className={`rounded-full px-3 py-1 transition ${
-                          calendar === c ? "bg-[linear-gradient(135deg,var(--gold-light),var(--gold))] text-velvet" : "text-cream-muted"
+                        aria-checked={focus === f}
+                        onClick={() => setFocus(f)}
+                        className={`min-h-11 rounded-xl border px-2 py-2 text-[13px] leading-tight transition ${
+                          focus === f
+                            ? "border-gold bg-gold/15 text-gold-light shadow-[0_0_12px_-4px_rgb(212_175_55/0.7)]"
+                            : "border-gold/25 bg-velvet/50 text-cream-muted hover:text-cream"
                         }`}
                       >
-                        {c === "BE" ? "พ.ศ." : "ค.ศ."}
+                        {FOCUS_LABEL[f]}
                       </button>
                     ))}
                   </div>
+                </fieldset>
+
+                {freeTickets > 0 && (
+                  <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-jade/40 bg-jade/10 px-4 py-3 text-sm text-cream">
+                    <input
+                      type="checkbox"
+                      checked={useFree}
+                      onChange={(e) => setUseFree(e.target.checked)}
+                      className="size-5 accent-[var(--gold)]"
+                    />
+                    ใช้สิทธิ์ดูดวงฟรี (เหลือ {freeTickets} ครั้ง)
+                  </label>
+                )}
+
+                <div className="flex items-center justify-between rounded-2xl bg-velvet/60 px-4 py-3 text-sm">
+                  <span className="text-cream-muted">ค่าตรวจดวง</span>
+                  <span className="flex items-center gap-1.5 font-semibold text-gold-light">
+                    {payingWithTicket ? (
+                      "ใช้สิทธิ์ฟรี 1 ครั้ง"
+                    ) : (
+                      <>
+                        <CoinIcon className="size-4" /> {formatCoins(PRICE)} เหรียญ
+                        <span className="font-normal text-cream-muted">(มี {formatCoins(balance)})</span>
+                      </>
+                    )}
+                  </span>
                 </div>
-                <div className="grid grid-cols-[1fr_1.6fr_1.3fr] gap-2">
-                  <select aria-label="วันที่" value={day} onChange={(e) => edit(setDay)(e.target.value)} className={inputClass}>
-                    <option value="">วัน</option>
-                    {Array.from({ length: 31 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                  <select aria-label="เดือน" value={month} onChange={(e) => edit(setMonth)(e.target.value)} className={inputClass}>
-                    <option value="">เดือน</option>
-                    {THAI_MONTHS.map((m, i) => (
-                      <option key={m} value={i + 1}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    aria-label={calendar === "BE" ? "ปีเกิด พ.ศ." : "ปีเกิด ค.ศ."}
-                    value={year}
-                    onChange={(e) => edit(setYear)(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    inputMode="numeric"
-                    placeholder={calendar === "BE" ? "2533" : "1990"}
-                    className={inputClass}
-                  />
-                </div>
-              </fieldset>
 
-              <label className={labelClass}>
-                <span>
-                  เวลาเกิด <span className="text-xs text-cream-muted/70">(ไม่บังคับ — ใช้ดูพุธกลางวัน/กลางคืน)</span>
-                </span>
-                <input type="time" value={birthTime} onChange={(e) => edit(setBirthTime)(e.target.value)} className={inputClass} />
-              </label>
+                {!canAfford && (
+                  <div className="flex flex-col gap-3 rounded-2xl border border-gold/40 bg-gold/5 px-4 py-4 text-center text-sm text-cream">
+                    เหรียญยังไม่พอตรวจดวงค่ะ ขาดอีก {formatCoins(PRICE - balance)} เหรียญ
+                    <GoldButton href="/topup" className="w-full">
+                      <CoinIcon className="size-5" /> เติมเหรียญ
+                    </GoldButton>
+                  </div>
+                )}
 
-              <fieldset className="flex flex-col gap-1.5">
-                <legend className="mb-1.5 text-sm text-cream-muted">เรื่องที่อยากให้แม่มูเน้น</legend>
-                <div role="radiogroup" className="grid grid-cols-3 gap-2">
-                  {FOCUS_OPTIONS.map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      role="radio"
-                      aria-checked={focus === f}
-                      onClick={() => setFocus(f)}
-                      className={`min-h-11 rounded-xl border px-2 py-2 text-[13px] leading-tight transition ${
-                        focus === f
-                          ? "border-gold bg-gold/15 text-gold-light shadow-[0_0_12px_-4px_rgb(212_175_55/0.7)]"
-                          : "border-gold/25 bg-velvet/50 text-cream-muted hover:text-cream"
-                      }`}
-                    >
-                      {FOCUS_LABEL[f]}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
+                {formError && (
+                  <p role="alert" className="rounded-xl border border-ruby/50 bg-ruby/10 px-4 py-3 text-sm text-cream">
+                    {formError}
+                  </p>
+                )}
 
-              {freeTickets > 0 && (
-                <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-jade/40 bg-jade/10 px-4 py-3 text-sm text-cream">
-                  <input
-                    type="checkbox"
-                    checked={useFree}
-                    onChange={(e) => setUseFree(e.target.checked)}
-                    className="size-5 accent-[var(--gold)]"
-                  />
-                  ใช้สิทธิ์ดูดวงฟรี (เหลือ {freeTickets} ครั้ง)
-                </label>
-              )}
+                <button type="submit" disabled={!canAfford} className={goldButtonClass({ size: "lg", className: "w-full" })}>
+                  ให้แม่มูถอดรหัสดวงชะตา
+                </button>
+                <p className="text-center text-[11px] text-cream-muted/70">ชื่อและวันเกิดใช้เพื่อการทำนายของหนูเท่านั้นค่ะ</p>
+              </form>
+            </MysticCard>
+          </motion.section>
+        )}
 
-              <div className="flex items-center justify-between rounded-2xl bg-velvet/60 px-4 py-3 text-sm">
-                <span className="text-cream-muted">ค่าตรวจดวง</span>
-                <span className="flex items-center gap-1.5 font-semibold text-gold-light">
-                  {payingWithTicket ? (
-                    "ใช้สิทธิ์ฟรี 1 ครั้ง"
-                  ) : (
+        {/* ---------------- LOADING ---------------- */}
+        {phase === "loading" && (
+          <motion.section key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-[12svh]">
+            <CrystalBallLoader messages={LOADING_MESSAGES} />
+          </motion.section>
+        )}
+
+        {/* ---------------- RESULT ---------------- */}
+        {phase === "result" && result && (
+          <motion.section
+            key="result"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col gap-4"
+          >
+            <ReadAloudControl text={result.reading} />
+
+            <ReadingCard
+              ref={shareRef}
+              title={`ดวงชะตาของ${result.profile.firstName}`}
+              subtitle={
+                <>
+                  เกิด{result.profile.birthDay.th} · {result.profile.birthDateTh}
+                  <br />
+                  เน้นเรื่อง{FOCUS_LABEL[result.profile.focus]}
+                  {result.asOf && (
                     <>
-                      <CoinIcon className="size-4" /> {formatCoins(PRICE)} เหรียญ
-                      <span className="font-normal text-cream-muted">(มี {formatCoins(balance)})</span>
+                      <br />
+                      <span data-testid="as-of">ตรวจตามเวลา {result.asOf}</span>
                     </>
                   )}
-                </span>
-              </div>
+                </>
+              }
+              header={<BirthProfileSummary profile={result.profile} />}
+              text={result.reading}
+              onTypingDone={() => setTypingDone(true)}
+            />
 
-              {!canAfford && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-gold/40 bg-gold/5 px-4 py-4 text-center text-sm text-cream">
-                  เหรียญยังไม่พอตรวจดวงค่ะ ขาดอีก {formatCoins(PRICE - balance)} เหรียญ
-                  <GoldButton href="/topup" className="w-full">
-                    <CoinIcon className="size-5" /> เติมเหรียญ
-                  </GoldButton>
-                </div>
-              )}
+            <ShareButton targetRef={shareRef} disabled={!typingDone} fileName="mae-mu-sandy-birthdate.png" />
 
-              {formError && (
-                <p role="alert" className="rounded-xl border border-ruby/50 bg-ruby/10 px-4 py-3 text-sm text-cream">
-                  {formError}
-                </p>
-              )}
-
-              <button type="submit" disabled={!canAfford} className={goldButtonClass({ size: "lg", className: "w-full" })}>
-                ให้แม่มูถอดรหัสดวงชะตา
-              </button>
-              <p className="text-center text-[11px] text-cream-muted/70">ชื่อและวันเกิดใช้เพื่อการทำนายของหนูเท่านั้นค่ะ</p>
-            </form>
-          </MysticCard>
-        </motion.section>
-      )}
-
-      {/* ---------------- LOADING ---------------- */}
-      {phase === "loading" && (
-        <motion.section key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pt-[12svh]">
-          <CrystalBallLoader messages={LOADING_MESSAGES} />
-        </motion.section>
-      )}
-
-      {/* ---------------- RESULT ---------------- */}
-      {phase === "result" && result && (
-        <motion.section
-          key="result"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col gap-4"
-        >
-          <ReadAloudControl text={result.reading} />
-
-          <ReadingCard
-            ref={shareRef}
-            title={`ดวงชะตาของ${result.profile.firstName}`}
-            subtitle={
-              <>
-                เกิด{result.profile.birthDay.th} · {result.profile.birthDateTh}
-                <br />
-                เน้นเรื่อง{FOCUS_LABEL[result.profile.focus]}
-                {result.asOf && (
-                  <>
-                    <br />
-                    <span data-testid="as-of">ตรวจตามเวลา {result.asOf}</span>
-                  </>
-                )}
-              </>
-            }
-            header={<BirthProfileSummary profile={result.profile} />}
-            text={result.reading}
-            onTypingDone={() => setTypingDone(true)}
-          />
-
-          <ShareButton targetRef={shareRef} disabled={!typingDone} fileName="mae-mu-sandy-birthdate.png" />
-
-          <p className="on-photo text-center text-xs text-cream">
-            {result.usedFreeTicket ? "ใช้สิทธิ์ดูดวงฟรีแล้ว" : `หัก ${formatCoins(PRICE)} เหรียญแล้ว`} · คงเหลือ{" "}
-            {formatCoins(balance)} เหรียญ
-          </p>
-
-          <button type="button" onClick={backToForm} className={goldButtonClass({ size: "lg", className: "w-full" })}>
-            ตรวจดวงอีกครั้ง
-          </button>
-        </motion.section>
-      )}
-
-      {/* ---------------- ERROR ---------------- */}
-      {phase === "error" && error && (
-        <motion.section key="error" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="pt-[12svh]">
-          <MysticCard className="flex flex-col items-center gap-4 p-6 text-center">
-            <p className="font-serif text-lg text-gold-light">
-              {error.code === "INSUFFICIENT_COINS" ? "เหรียญไม่เพียงพอ" : "ขออภัยค่ะ"}
+            <p className="on-photo text-center text-xs text-cream">
+              {result.usedFreeTicket ? "ใช้สิทธิ์ดูดวงฟรีแล้ว" : `หัก ${formatCoins(PRICE)} เหรียญแล้ว`} · คงเหลือ{" "}
+              {formatCoins(balance)} เหรียญ
             </p>
-            <p className="text-sm leading-relaxed text-cream/90">{error.message}</p>
-            {error.code === "INSUFFICIENT_COINS" ? (
-              <GoldButton href="/topup" size="lg" className="w-full">
-                <CoinIcon className="size-5" /> เติมเหรียญ
-              </GoldButton>
-            ) : (
-              <button type="button" onClick={backToForm} className={goldButtonClass({ size: "lg", className: "w-full" })}>
-                กลับไปแก้ไขข้อมูล
-              </button>
-            )}
-          </MysticCard>
-        </motion.section>
-      )}
-    </AnimatePresence>
+
+            <button type="button" onClick={backToForm} className={goldButtonClass({ size: "lg", className: "w-full" })}>
+              ตรวจดวงอีกครั้ง
+            </button>
+          </motion.section>
+        )}
+
+        {/* ---------------- ERROR ---------------- */}
+        {phase === "error" && error && (
+          <motion.section key="error" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="pt-[12svh]">
+            <MysticCard className="flex flex-col items-center gap-4 p-6 text-center">
+              <p className="font-serif text-lg text-gold-light">
+                {error.code === "INSUFFICIENT_COINS" ? "เหรียญไม่เพียงพอ" : "ขออภัยค่ะ"}
+              </p>
+              <p className="text-sm leading-relaxed text-cream/90">{error.message}</p>
+              {error.code === "INSUFFICIENT_COINS" ? (
+                <GoldButton href="/topup" size="lg" className="w-full">
+                  <CoinIcon className="size-5" /> เติมเหรียญ
+                </GoldButton>
+              ) : (
+                <button type="button" onClick={backToForm} className={goldButtonClass({ size: "lg", className: "w-full" })}>
+                  กลับไปแก้ไขข้อมูล
+                </button>
+              )}
+            </MysticCard>
+          </motion.section>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
