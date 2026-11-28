@@ -10,8 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const Body = z.object({ bet: z.number().int().refine((b) => (BETS as readonly number[]).includes(b), "เดิมพันไม่ถูกต้อง") });
 
 /**
- * Start a round of วงล้อไต่ชั้น. The client sends only the bet; `power_start_bonus` (migration 0023, else `power_start` of 0021) charges it and
- * creates the round in one transaction.
+ * Start a round of วงล้อไต่ชั้น. The client sends only the bet; `power_start_bonus_v3` (migration 0024, else the 0023 / 0021 function) charges
+ * it and creates the round in one transaction.
  */
 export async function POST(request: Request) {
   const ctx: { userId?: string } = {};
@@ -26,8 +26,9 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient();
     const args = { p_user_id: user.id, p_bet: body.bet };
-    let { data, error } = await admin.rpc("power_start_bonus", args);
-    // migration 0023 not installed yet: a round under the original rules
+    let { data, error } = await admin.rpc("power_start_bonus_v3", args);
+    // migration 0024 / 0023 not installed yet: a round under the rules the database does have
+    if (error?.code === "PGRST202") ({ data, error } = await admin.rpc("power_start_bonus", args));
     if (error?.code === "PGRST202") ({ data, error } = await admin.rpc("power_start", args));
     if (error) {
       if (shouldAlertRpcError(error)) await alertAdminError({ where: "power_start (หักเดิมพัน/เริ่มรอบ)", userId: user.id, error });

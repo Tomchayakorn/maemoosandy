@@ -7,7 +7,7 @@ import { PowerWheelGame } from "@/components/power-wheel/PowerWheelGame";
 import { PowerWheelRules } from "@/components/rules/PowerWheelRules";
 import { RulesGate } from "@/components/rules/RulesGate";
 import { BETS, MAX_PAYOUT } from "@/lib/power-wheel/config";
-import { loadPowerState, powerBonusAvailable } from "@/lib/power-wheel/server";
+import { loadPowerState, powerRulesVersion } from "@/lib/power-wheel/server";
 import { getCurrentUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -43,8 +43,8 @@ async function Gate() {
   await connection();
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/power-wheel");
-  const [state, bonus] = await Promise.all([loadPowerState(user.id), powerBonusAvailable()]);
-  return <PowerWheelGame initialBalance={state.balance} unavailable={state.unavailable} initialRound={state.round} bonusAvailable={bonus} />;
+  const [state, rules] = await Promise.all([loadPowerState(user.id), powerRulesVersion()]);
+  return <PowerWheelGame initialBalance={state.balance} unavailable={state.unavailable} initialRound={state.round} rules={rules} />;
 }
 
 /** The rules pop-up remembers its confirmation per user, so it needs the signed-in user's id (hence its own Suspense). */
@@ -52,11 +52,12 @@ async function RulesForUser() {
   await connection();
   const user = await getCurrentUser();
   if (!user) return null;
-  const bonus = await powerBonusAvailable();
-  // the bonus changes what a level pays, so everyone is shown the rules once more when it is switched on (its own confirmation key)
+  const rules = await powerRulesVersion();
+  // new rules change the chances and what a level pays, so everyone is shown them once more (one confirmation key per version)
+  const game = rules === 3 ? "power-wheel-bonus-v3" : rules === 2 ? "power-wheel-bonus" : "power-wheel";
   return (
-    <RulesGate game={bonus ? "power-wheel-bonus" : "power-wheel"} userId={user.id} title="กติกาการเล่น" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
-      <PowerWheelRules bonus={bonus} />
+    <RulesGate game={game} userId={user.id} title="กติกาการเล่น" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
+      <PowerWheelRules version={rules} />
     </RulesGate>
   );
 }

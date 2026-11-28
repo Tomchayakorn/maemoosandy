@@ -784,3 +784,46 @@ html[data-tarot-mood="reading"] .tarot-tint-reading {
     display: none;
   }
 }
+
+/* ---------- เปิดหีบมนตรา bonus multipliers: violet and gold, only opacity / transform move ---------- */
+.mystic-bonus-ring {
+  box-shadow:
+    0 0 0 2px rgb(255 236 170 / 0.85),
+    0 0 22px 6px rgb(168 85 247 / 0.55),
+    inset 0 0 18px rgb(243 217 139 / 0.28);
+  animation: mystic-bonus-ring 1.8s ease-in-out infinite;
+}
+.mystic-bonus-pill {
+  animation: mystic-bonus-pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.mystic-burst {
+  background: radial-gradient(circle, rgb(26 10 52 / 0.95) 0%, rgb(52 22 96 / 0.88) 46%, rgb(243 217 139 / 0.24) 62%, transparent 72%);
+  animation: mystic-burst 2200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes mystic-bonus-ring {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@keyframes mystic-bonus-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes mystic-burst {
+  0% { opacity: 0; transform: scale(0.4); }
+  16% { opacity: 1; transform: scale(1.14); }
+  28% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mystic-bonus-ring {
+    animation: none;
+    opacity: 0.85;
+  }
+  .mystic-bonus-pill {
+    animation: none;
+  }
+  .mystic-burst {
+    display: none;
+  }
+}

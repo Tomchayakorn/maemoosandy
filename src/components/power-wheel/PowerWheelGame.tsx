@@ -41,13 +41,13 @@ export function PowerWheelGame({
   initialBalance,
   initialRound,
   unavailable = false,
-  bonusAvailable = false,
+  rules = 1,
 }: {
   initialBalance: number;
   initialRound: PowerRoundView | null;
   unavailable?: boolean;
-  /** migration 0023 is installed: new rounds are bonus rounds */
-  bonusAvailable?: boolean;
+  /** the rules new rounds are played under (2 / 3 = bonus rounds) */
+  rules?: RulesVersion;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -245,7 +245,7 @@ export function PowerWheelGame({
   const nextLevel = level + 1;
   const wheelLevel = round && !active && round.failed ? level + 1 : nextLevel; // after a loss the wheel still shows the level that was failed
   const danger = dangerSlices(Math.min(wheelLevel, MAX_LEVEL));
-  const version: RulesVersion = round ? round.version : bonusAvailable ? 2 : 1;
+  const version: RulesVersion = round ? round.version : rules; // a running round keeps the rules it started with
   const bonus = round?.bonus ?? null;
   const nextBp = level < MAX_LEVEL ? effectiveBp(level + 1, version, bonus) : null;
   const currentBp = level > 0 ? effectiveBp(level, version, bonus) : null;
@@ -268,7 +268,7 @@ export function PowerWheelGame({
         {burst !== null && <BonusBurst bonus={burst} onDone={() => setBurst(null)} />}
       </div>
 
-      {round === null && !unavailable && <Setup bet={bet} balance={balance} busy={busy} bonusAvailable={bonusAvailable} onBet={setBet} onStart={startRound} />}
+      {round === null && !unavailable && <Setup bet={bet} balance={balance} busy={busy} rules={rules} onBet={setBet} onStart={startRound} />}
 
       {round && active && (
         <>
@@ -281,7 +281,7 @@ export function PowerWheelGame({
               {level < 1 ? "ผ่านอย่างน้อย 1 ชั้นก่อน จึงรับเหรียญได้" : `💰 รับเหรียญขั้นนี้ +${formatCoins(round.payout)}`}
             </GoldButton>
             {/* one line directly under the buttons: seen without scrolling, and above the floating LINE button */}
-            {version === 2 && <BonusStrip level={level} bonus={bonus} />}
+            {version !== 1 && <BonusStrip version={version} level={level} bonus={bonus} />}
           </div>
           <div className="flex flex-col gap-3 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-3.5 shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
             <StatusBar
@@ -292,7 +292,7 @@ export function PowerWheelGame({
               nextBp={nextBp}
               nextPayout={nextBp !== null ? roundPayout(round.bet, level + 1, version, bonus) : null}
               nextReachesCap={roundReachesCap(round.bet, level + 1, version, bonus)}
-              nextUnlocks={version === 2 && bonus === null && level + 1 === BONUS_UNLOCK_LEVEL}
+              nextUnlocks={version !== 1 && bonus === null && level + 1 === BONUS_UNLOCK_LEVEL}
               safePct={safePct}
             />
           </div>
@@ -385,7 +385,7 @@ function MultiplierTable({ level, version, bonus }: { level: number; version: Ru
   return (
     <details className="group rounded-2xl border border-gold/25 bg-velvet/60 px-3 py-2 text-left">
       <summary className="cursor-pointer list-none text-center text-xs text-gold-light marker:hidden">ดูตารางตัวคูณทุกชั้น <span className="inline-block transition group-open:rotate-180">▾</span></summary>
-      {version === 2 && (
+      {version !== 1 && (
         <p data-testid="table-note" className="mt-1.5 text-center text-[11px] text-cream-muted">
           {bonus !== null && bonus > 1 ? `ตั้งแต่ชั้น ${BONUS_UNLOCK_LEVEL} รวมโบนัส ×${bonus} ของรอบนี้แล้ว` : bonus === 1 ? "รอบนี้ไม่ติดโบนัส ใช้ตัวคูณตามตาราง" : `ตั้งแต่ชั้น ${BONUS_UNLOCK_LEVEL} ตัวคูณจะคูณด้วยโบนัสที่สุ่มได้`}
         </p>
@@ -405,7 +405,7 @@ function MultiplierTable({ level, version, bonus }: { level: number; version: Ru
   );
 }
 
-function Setup({ bet, balance, busy, bonusAvailable, onBet, onStart }: { bet: number; balance: number; busy: boolean; bonusAvailable: boolean; onBet: (b: number) => void; onStart: () => void }) {
+function Setup({ bet, balance, busy, rules, onBet, onStart }: { bet: number; balance: number; busy: boolean; rules: RulesVersion; onBet: (b: number) => void; onStart: () => void }) {
   const chip = (on: boolean) =>
     "flex h-12 min-w-[4rem] flex-1 items-center justify-center rounded-xl border text-sm transition " +
     (on ? "border-gold-light bg-gold/20 text-gold-light" : "border-gold/40 text-cream hover:border-gold-light");
@@ -433,7 +433,7 @@ function Setup({ bet, balance, busy, bonusAvailable, onBet, onStart }: { bet: nu
           <Link href="/topup" className={goldButtonClass({ className: "w-full" })}>เติมเหรียญเลย</Link>
         </div>
       )}
-      {bonusAvailable && <BonusStrip level={null} bonus={null} />}
+      {rules !== 1 && <BonusStrip version={rules} level={null} bonus={null} />}
       <p className="rounded-xl border border-gold/20 bg-midnight/60 p-3 text-xs leading-relaxed text-cream-muted">
         หมุนวงล้อทีละชั้น ช่อง ✨ คือผ่านชั้นและพลังสะสมเพิ่ม ช่อง 💀 คือจบรอบและเสียเดิมพัน ยิ่งชั้นสูง ช่อง 💀 ยิ่งมาก กดหยุดรับเหรียญได้ทุกเมื่อหลังผ่านอย่างน้อย 1 ชั้น รางวัลสะสมเข้ากระเป๋าเหรียญและใช้ในระบบเท่านั้น
       </p>

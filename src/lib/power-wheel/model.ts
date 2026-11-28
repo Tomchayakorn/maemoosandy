@@ -1,12 +1,13 @@
 import {
-  BETS, BONUS_UNLOCK_LEVEL, MAX_LEVEL, SLICES, bonusForRoll, isDangerSlice, payoutFor, reachesCap, roundPayout, roundReachesCap, type Bonus, type RoundStatus,
+  BETS, BONUS_UNLOCK_LEVEL, LATEST_BONUS_VERSION, MAX_LEVEL, SLICES, bonusForRoll, isDangerSlice, payoutFor, reachesCap, roundPayout, roundReachesCap, type Bonus, type BonusVersion,
+  type RoundStatus,
 } from "./config";
 
 /**
- * Reference model of the SQL functions (migrations 0021 and 0023). The database is the source of truth; this keeps the rules unit-testable
+ * Reference model of the SQL functions (migrations 0021, 0023 and 0024). The database is the source of truth; this keeps the rules unit-testable
  * (double stop, stop with nothing cleared, finished rounds, conservation of coins). Not used at runtime.
  */
-export type ModelRound = { id: number; bet: number; level: number; status: RoundStatus; payout: number; version?: 2; bonus?: Bonus };
+export type ModelRound = { id: number; bet: number; level: number; status: RoundStatus; payout: number; version?: BonusVersion; bonus?: Bonus };
 export type ModelState = { balance: number; rounds: ModelRound[]; ledger: { reason: "power_bet" | "power_win"; delta: number; roundId: number }[] };
 
 export class ModelError extends Error {}
@@ -66,20 +67,20 @@ export function stop(s: ModelState, id: number): ModelRound {
   return r;
 }
 
-export function startBonus(s: ModelState, bet: number): ModelRound {
+export function startBonus(s: ModelState, bet: number, version: BonusVersion = LATEST_BONUS_VERSION): ModelRound {
   const r = start(s, bet);
-  r.version = 2;
+  r.version = version;
   return r;
 }
 
 /** power_spin_bonus: an old-rule round behaves exactly as before; a bonus round unlocks its multiplier once, on clearing the unlock level. */
 export function spinBonus(s: ModelState, id: number, slice: number, roll: number): { round: ModelRound; failed: boolean; auto: "top" | "cap" | null; unlocked: boolean } {
   if (!Number.isInteger(slice) || slice < 0 || slice >= SLICES) throw new ModelError("INVALID_SLICE");
-  const drawn = bonusForRoll(roll);
-  if (drawn === null) throw new ModelError("INVALID_REWARD");
+  if (bonusForRoll(roll) === null) throw new ModelError("INVALID_REWARD");
   const r = find(s, id);
   if (r.status !== "active") throw new ModelError("ROUND_NOT_ACTIVE");
-  if (r.version !== 2) return { ...spin(s, id, slice), unlocked: false };
+  const version = r.version;
+  if (!version) return { ...spin(s, id, slice), unlocked: false };
   const k = r.level + 1;
   if (isDangerSlice(k, slice)) {
     r.status = "lost";
@@ -87,10 +88,10 @@ export function spinBonus(s: ModelState, id: number, slice: number, roll: number
     return { round: r, failed: true, auto: null, unlocked: false };
   }
   const unlocked = r.bonus === undefined && k >= BONUS_UNLOCK_LEVEL;
-  if (unlocked) r.bonus = drawn;
+  if (unlocked) r.bonus = bonusForRoll(roll, version)!; // the odds of the round's own version
   r.level = k;
-  r.payout = roundPayout(r.bet, k, 2, r.bonus ?? null);
-  const auto = k === MAX_LEVEL ? "top" : roundReachesCap(r.bet, k, 2, r.bonus ?? null) ? "cap" : null;
+  r.payout = roundPayout(r.bet, k, version, r.bonus ?? null);
+  const auto = k === MAX_LEVEL ? "top" : roundReachesCap(r.bet, k, version, r.bonus ?? null) ? "cap" : null;
   if (auto) {
     r.status = "cleared";
     pay(s, r, r.payout);

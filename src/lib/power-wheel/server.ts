@@ -1,11 +1,14 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { RulesVersion } from "./config";
 import { toRoundView, type PowerRoundView } from "./types";
 
-/** True when migration 0023 is installed, i.e. new rounds are bonus rounds. */
-export async function powerBonusAvailable(): Promise<boolean> {
-  const { error } = await createAdminClient().rpc("power_bonus_unlock_level");
-  return !error;
+/** The rules new rounds are played under, from what is installed in the database: 3 (migration 0024), 2 (0023) or 1. */
+export async function powerRulesVersion(): Promise<RulesVersion> {
+  const admin = createAdminClient();
+  const [v3, v2] = await Promise.all([admin.rpc("power_bonus_for_roll_v3", { p_roll: 0 }), admin.rpc("power_bonus_unlock_level")]);
+  if (!v3.error) return 3;
+  return v2.error ? 1 : 2;
 }
 
 /** The verified user's unfinished round (if any) and wallet balance, read on the server. Used by the page and by GET /api/power-wheel/state. */

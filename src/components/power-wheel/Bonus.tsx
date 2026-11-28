@@ -1,7 +1,6 @@
-import { BONUS_ODDS, BONUS_ROLLS, BONUS_UNLOCK_LEVEL, type Bonus } from "@/lib/power-wheel/config";
+import { BONUS_ROLLS, BONUS_RULES, BONUS_UNLOCK_LEVEL, type Bonus, type BonusVersion } from "@/lib/power-wheel/config";
 
 /** The bonus badges of วงล้อไต่ชั้น. Display only: they show what the server stored on the round and never decide anything. */
-const ASCENDING = [...BONUS_ODDS].sort((a, b) => a.bonus - b.bonus);
 const percent = (rolls: number) => `${(rolls / BONUS_ROLLS) * 100}%`;
 
 /**
@@ -11,7 +10,8 @@ const percent = (rolls: number) => `${(rolls / BONUS_ROLLS) * 100}%`;
  *   unlocked  → the multiplier of this round lit in gold (or "no bonus this time")
  * During a round it is a single line, so it stays above the floating contact button on a phone.
  */
-export function BonusStrip({ level, bonus }: { level: number | null; bonus: Bonus | null }) {
+export function BonusStrip({ version, level, bonus }: { version: BonusVersion; level: number | null; bonus: Bonus | null }) {
+  const ascending = [...BONUS_RULES[version].odds].sort((a, b) => a.bonus - b.bonus);
   const state = bonus !== null ? (bonus > 1 ? "won" : "none") : level === null ? "preview" : "locked";
   const preview = state === "preview";
   const left = Math.max(1, BONUS_UNLOCK_LEVEL - (level ?? 0));
@@ -33,7 +33,7 @@ export function BonusStrip({ level, bonus }: { level: number | null; bonus: Bonu
         {preview && <>🎁 ผ่านชั้น {BONUS_UNLOCK_LEVEL} ปลดล็อกโบนัสตัวคูณ (สุ่ม 1 ครั้งต่อรอบ)</>}
       </p>
       <ul className={"flex gap-1.5 " + (preview ? "justify-center" : "shrink-0")} aria-label="โบนัสตัวคูณ">
-        {ASCENDING.map((o) => {
+        {ascending.map((o) => {
           const lit = bonus === o.bonus;
           return (
             <li

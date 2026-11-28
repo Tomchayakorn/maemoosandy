@@ -253,7 +253,7 @@ export type Database = {
           level: number;
           status: "active" | "cashed" | "lost" | "cleared";
           payout: number;
-          /** migration 0023; absent before it */
+          /** migration 0023 (1 / 2) and 0024 (3); absent before 0023 */
           bonus_version?: number;
           bonus_multiplier?: number | null;
           created_at: Timestamp;
@@ -295,6 +295,9 @@ export type Database = {
           safe_count: number;
           status: "active" | "cashed" | "lost" | "cleared";
           payout: number;
+          /** migration 0025; absent before it */
+          bonus_version?: number;
+          bonus_multiplier?: number | null;
           created_at: Timestamp;
           finished_at: Timestamp | null;
         };
@@ -493,6 +496,18 @@ export type Database = {
         Args: { p_user_id: string; p_round_id: string; p_tile: number };
         Returns: Json;
       };
+      mystic_bonus_unlock_count: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      mystic_start_bonus: {
+        Args: { p_user_id: string; p_bet: number; p_mines: number; p_mine_mask: number };
+        Returns: Json; // round view
+      };
+      mystic_open_bonus: {
+        Args: { p_user_id: string; p_round_id: string; p_tile: number; p_roll: number };
+        Returns: Json;
+      };
       mystic_cashout: {
         Args: { p_user_id: string; p_round_id: string };
         Returns: Json;
@@ -522,6 +537,14 @@ export type Database = {
         Returns: number;
       };
       power_start_bonus: {
+        Args: { p_user_id: string; p_bet: number };
+        Returns: Json; // round view
+      };
+      power_bonus_for_roll_v3: {
+        Args: { p_roll: number };
+        Returns: number;
+      };
+      power_start_bonus_v3: {
         Args: { p_user_id: string; p_bet: number };
         Returns: Json; // round view
       };

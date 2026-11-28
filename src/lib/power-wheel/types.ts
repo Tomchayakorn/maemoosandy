@@ -15,7 +15,7 @@ export type PowerRoundView = {
   /** only on a spin response: the slice the wheel landed on and whether it was a danger slice */
   slice: number | null;
   failed: boolean;
-  /** 2 = a bonus round (migration 0023); 1 = the original rules */
+  /** 1 = the original rules; 2 / 3 = a bonus round (migrations 0023 / 0024) */
   version: RulesVersion;
   /** the round's multiplier once unlocked (1 = unlocked, no bonus); null while still locked or in a version 1 round */
   bonus: Bonus | null;
@@ -50,7 +50,7 @@ export function toRoundView(r: Raw): PowerRoundView {
     auto: r.auto ?? null,
     slice: r.slice ?? null,
     failed: r.failed ?? false,
-    version: r.bonus_version === 2 ? 2 : 1,
+    version: r.bonus_version === 2 || r.bonus_version === 3 ? r.bonus_version : 1,
     bonus: r.bonus === 1 || r.bonus === 2 || r.bonus === 5 || r.bonus === 8 ? r.bonus : null,
     unlocked: r.unlocked ?? false,
   };

@@ -1,10 +1,15 @@
-import { BETS, EDGE_BP, MAX_PAYOUT, TILES } from "@/lib/mystic/config";
+import {
+  BETS, BONUS_AVERAGE_1000, BONUS_ODDS, BONUS_ROLLS, BONUS_UNLOCK_SAFE, EDGE_BP, MAX_PAYOUT, NO_BONUS_ROLLS, TILES, roundPayout, type RulesVersion,
+} from "@/lib/mystic/config";
 import { RuleList, RuleSection } from "./RuleParts";
 
 const n = (v: number) => v.toLocaleString("th-TH");
+const pct = (rolls: number) => `${(rolls / BONUS_ROLLS) * 100}%`;
 
 /** Rules of เปิดหีบมนตรา. Numbers come from the constants the game uses (a test keeps the SQL in sync with them). */
-export function MysticRules() {
+export function MysticRules({ version = 1 }: { version?: RulesVersion }) {
+  const bonus = version === 2;
+  const U = BONUS_UNLOCK_SAFE;
   return (
     <>
       <RuleSection title="1. วิธีเล่น">
@@ -19,12 +24,29 @@ export function MysticRules() {
 
       <RuleSection title="2. ตัวคูณและโอกาส">
         <RuleList>
-          <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการเปิดหีบปลอดภัยติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นจึงประมาณ {100 - EDGE_BP / 100}% ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่หีบใบไหน</li>
+          {bonus ? (
+            <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการเปิดหีบปลอดภัยติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นเมื่อรวมโบนัสแล้วจึง<b>ไม่เกินประมาณ {100 - EDGE_BP / 100}%</b> ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่หีบใบไหน</li>
+          ) : (
+            <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการเปิดหีบปลอดภัยติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นจึงประมาณ {100 - EDGE_BP / 100}% ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่หีบใบไหน</li>
+          )}
           <li>ยอดรับเหรียญปัดเป็นเหรียญเต็ม (ปัดลง) ดังนั้นเดิมพันน้อยอาจได้ผลคืนต่ำกว่าค่าเฉลี่ยเล็กน้อย</li>
           <li>ตำแหน่งจุดอาถรรพ์ถูกสุ่มโดยระบบหลังบ้านตอนเริ่มรอบและเปลี่ยนไม่ได้ ไม่มีวิธีเลือกหีบให้ปลอดภัยกว่า</li>
           <li>ตารางตัวคูณของแต่ละระดับดูได้ที่หน้าเริ่มรอบก่อนกดเริ่มเล่น</li>
         </RuleList>
       </RuleSection>
+
+      {bonus && (
+        <RuleSection title="โบนัสตัวคูณ ×2 ×5 ×8">
+          <RuleList>
+            <li>เปิดหีบปลอดภัยใบที่ {U} แล้ว ระบบหลังบ้านสุ่มตัวคูณ <b>1 ครั้งต่อรอบ</b>: {[...BONUS_ODDS].sort((a, b) => a.bonus - b.bonus).map((o) => `×${o.bonus} โอกาส ${pct(o.rolls)}`).join(" · ")} · ไม่ติดโบนัส (×1) {pct(NO_BONUS_ROLLS)}</li>
+            <li>รางวัล = ปัดลง(เดิมพัน × ตัวคูณของหีบ × โบนัส) ใช้กับรางวัลตั้งแต่ใบที่ {U} ขึ้นไป และไม่เกิน {n(MAX_PAYOUT)} เหรียญ</li>
+            <li>
+              <b>ตัวคูณตั้งแต่ใบที่ {U} ต่ำกว่าแบบไม่มีโบนัส</b> (หารด้วยค่าเฉลี่ยโบนัส {BONUS_AVERAGE_1000 / 1000}) เพื่อนำส่วนนี้ไปจ่ายโบนัส เช่น เดิมพัน 100 อาถรรพ์ 1 จุด ใบที่ {U}: ×1 รับ {n(roundPayout(100, 1, U, 2, 1))} (แบบไม่มีโบนัส {n(roundPayout(100, 1, U, 1))}) · ×2 รับ {n(roundPayout(100, 1, U, 2, 2))} · ×5 รับ {n(roundPayout(100, 1, U, 2, 5))} · ×8 รับ {n(roundPayout(100, 1, U, 2, 8))}
+            </li>
+            <li>เปิดเจอจุดอาถรรพ์หลังปลดล็อกแล้ว ยังเสียเดิมพันและโบนัสของรอบนั้น · รอบที่เริ่มก่อนกติกาชุดนี้ใช้กติกาเดิมจนจบ</li>
+          </RuleList>
+        </RuleSection>
+      )}
 
       <RuleSection title="3. เพดานรางวัลและเงื่อนไขอื่น">
         <RuleList>

@@ -7,7 +7,7 @@ import { MysticGame } from "@/components/mystic/MysticGame";
 import { MysticRules } from "@/components/rules/MysticRules";
 import { RulesGate } from "@/components/rules/RulesGate";
 import { BETS, MAX_PAYOUT } from "@/lib/mystic/config";
-import { loadMysticState } from "@/lib/mystic/server";
+import { loadMysticState, mysticRulesVersion } from "@/lib/mystic/server";
 import { getCurrentUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -43,8 +43,8 @@ async function Gate() {
   await connection();
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/mystic-chests");
-  const state = await loadMysticState(user.id);
-  return <MysticGame initialBalance={state.balance} unavailable={state.unavailable} initialRound={state.round} />;
+  const [state, rules] = await Promise.all([loadMysticState(user.id), mysticRulesVersion()]);
+  return <MysticGame initialBalance={state.balance} unavailable={state.unavailable} initialRound={state.round} rules={rules} />;
 }
 
 /** The rules pop-up remembers its confirmation per user, so it needs the signed-in user's id (hence its own Suspense). */
@@ -52,9 +52,11 @@ async function RulesForUser() {
   await connection();
   const user = await getCurrentUser();
   if (!user) return null;
+  const rules = await mysticRulesVersion();
+  // the bonus changes what a chest pays, so everyone is shown the rules once more when it is switched on (its own confirmation key)
   return (
-    <RulesGate game="mystic-chests" userId={user.id} title="กติกาการเล่นและการถอนเงิน" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
-      <MysticRules />
+    <RulesGate game={rules === 2 ? "mystic-chests-bonus" : "mystic-chests"} userId={user.id} title="กติกาการเล่นและการถอนเงิน" startLabel="ยืนยันกติกา เริ่มเล่นเกม">
+      <MysticRules version={rules} />
     </RulesGate>
   );
 }

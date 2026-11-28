@@ -1,4 +1,4 @@
-import type { RoundStatus } from "./config";
+import type { Bonus, RoundStatus, RulesVersion } from "./config";
 
 /** What the API returns for a round. `mineMask` is null while the round is active (the cursed chests stay secret). */
 export type MysticRoundView = {
@@ -14,6 +14,12 @@ export type MysticRoundView = {
   balance: number;
   /** set when the round paid out by itself: all safe chests opened, or the payout cap reached */
   auto: "all_open" | "cap" | null;
+  /** 2 = a bonus round (migration 0025); 1 = the original rules */
+  version: RulesVersion;
+  /** the round's multiplier once unlocked (1 = unlocked, no bonus); null while still locked or in a version 1 round */
+  bonus: Bonus | null;
+  /** only on an open response: this very chest unlocked the bonus */
+  unlocked: boolean;
 };
 
 type Raw = {
@@ -27,6 +33,10 @@ type Raw = {
   mine_mask: number | null;
   balance: number;
   auto?: "all_open" | "cap" | null;
+  /** absent before migration 0025 */
+  bonus_version?: number | null;
+  bonus?: number | null;
+  unlocked?: boolean | null;
 };
 
 export function toRoundView(r: Raw): MysticRoundView {
@@ -42,5 +52,8 @@ export function toRoundView(r: Raw): MysticRoundView {
     mineMask: r.status === "active" ? null : r.mine_mask,
     balance: r.balance,
     auto: r.auto ?? null,
+    version: r.bonus_version === 2 ? 2 : 1,
+    bonus: r.bonus === 1 || r.bonus === 2 || r.bonus === 5 || r.bonus === 8 ? r.bonus : null,
+    unlocked: r.unlocked ?? false,
   };
 }

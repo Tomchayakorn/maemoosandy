@@ -1,6 +1,6 @@
 import "server-only";
 import { randomInt } from "node:crypto";
-import { TILES } from "./config";
+import { BONUS_ROLLS, TILES } from "./config";
 
 /** Places `mines` cursed chests with crypto randomness (partial Fisher–Yates) and returns them as a 9-bit mask. Server side only. */
 export function drawMineMask(mines: number, rand: (maxExclusive: number) => number = (n) => randomInt(n)): number {
@@ -12,4 +12,9 @@ export function drawMineMask(mines: number, rand: (maxExclusive: number) => numb
     mask |= 1 << tiles[i];
   }
   return mask;
+}
+
+/** The bonus roll sent with every chest of a bonus round (crypto). The database uses it only when that chest unlocks the bonus. */
+export function drawBonusRoll(rand: (maxExclusive: number) => number = (n) => randomInt(n)): number {
+  return rand(BONUS_ROLLS);
 }

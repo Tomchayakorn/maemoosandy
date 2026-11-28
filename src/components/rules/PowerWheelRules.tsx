@@ -1,5 +1,5 @@
 import {
-  BETS, BONUS_AVERAGE_1000, BONUS_ODDS, BONUS_ROLLS, BONUS_UNLOCK_LEVEL, EDGE_BP, MAX_LEVEL, MAX_PAYOUT, NO_BONUS_ROLLS, SLICES, roundPayout,
+  BETS, BONUS_ROLLS, BONUS_RULES, BONUS_UNLOCK_LEVEL, EDGE_BP, MAX_LEVEL, MAX_PAYOUT, SLICES, roundPayout, type RulesVersion,
 } from "@/lib/power-wheel/config";
 import { RuleList, RuleSection } from "./RuleParts";
 
@@ -7,8 +7,9 @@ const n = (v: number) => v.toLocaleString("th-TH");
 const pct = (rolls: number) => `${(rolls / BONUS_ROLLS) * 100}%`;
 
 /** Rules of วงล้อไต่ชั้น. Numbers come from the constants the game uses (a test keeps the SQL in sync with them). */
-export function PowerWheelRules({ bonus = false }: { bonus?: boolean }) {
+export function PowerWheelRules({ version = 1 }: { version?: RulesVersion }) {
   const U = BONUS_UNLOCK_LEVEL;
+  const bonus = version === 1 ? null : BONUS_RULES[version];
   return (
     <>
       <RuleSection title="1. วิธีเล่น">
@@ -34,15 +35,15 @@ export function PowerWheelRules({ bonus = false }: { bonus?: boolean }) {
         </RuleList>
       </RuleSection>
 
-      {bonus && (
+      {bonus && version !== 1 && (
         <RuleSection title="โบนัสตัวคูณ ×2 ×5 ×8">
           <RuleList>
-            <li>ผ่านชั้น {U} แล้ว ระบบหลังบ้านสุ่มตัวคูณ <b>1 ครั้งต่อรอบ</b>: {[...BONUS_ODDS].reverse().map((o) => `×${o.bonus} โอกาส ${pct(o.rolls)}`).join(" · ")} · ไม่ติดโบนัส (×1) {pct(NO_BONUS_ROLLS)}</li>
+            <li>ผ่านชั้น {U} แล้ว ระบบหลังบ้านสุ่มตัวคูณ <b>1 ครั้งต่อรอบ</b>: {[...bonus.odds].sort((a, b) => a.bonus - b.bonus).map((o) => `×${o.bonus} โอกาส ${pct(o.rolls)}`).join(" · ")} · ไม่ติดโบนัส (×1) {pct(bonus.noBonusRolls)}</li>
             <li>รางวัล = ปัดลง(เดิมพัน × ตัวคูณของชั้น × โบนัส) ใช้กับรางวัลตั้งแต่ชั้น {U} ขึ้นไป และไม่เกิน {n(MAX_PAYOUT)} เหรียญ</li>
             <li>
-              <b>ตัวคูณของชั้นตั้งแต่ชั้น {U} ต่ำกว่าแบบไม่มีโบนัส</b> (หารด้วยค่าเฉลี่ยโบนัส {BONUS_AVERAGE_1000 / 1000}) เพื่อนำส่วนนี้ไปจ่ายโบนัส เช่น เดิมพัน 100 ชั้น {U}: ×1 รับ {n(roundPayout(100, U, 2, 1))} (เดิม {n(roundPayout(100, U, 1))}) · ×2 รับ {n(roundPayout(100, U, 2, 2))} · ×5 รับ {n(roundPayout(100, U, 2, 5))} · ×8 รับ {n(roundPayout(100, U, 2, 8))}
+              <b>ตัวคูณของชั้นตั้งแต่ชั้น {U} ต่ำกว่าแบบไม่มีโบนัส</b> (หารด้วยค่าเฉลี่ยโบนัส {bonus.average1000 / 1000}) เพื่อนำส่วนนี้ไปจ่ายโบนัส เช่น เดิมพัน 100 ชั้น {U}: ×1 รับ {n(roundPayout(100, U, version, 1))} (แบบไม่มีโบนัส {n(roundPayout(100, U, 1))}) · ×2 รับ {n(roundPayout(100, U, version, 2))} · ×5 รับ {n(roundPayout(100, U, version, 5))} · ×8 รับ {n(roundPayout(100, U, version, 8))}
             </li>
-            <li>ตกช่อง 💀 หลังปลดล็อกแล้ว ยังเสียเดิมพันและโบนัสของรอบนั้น · รอบที่เริ่มก่อนเปิดระบบโบนัสใช้กติกาเดิมจนจบ</li>
+            <li>ตกช่อง 💀 หลังปลดล็อกแล้ว ยังเสียเดิมพันและโบนัสของรอบนั้น · รอบที่เริ่มก่อนกติกาชุดนี้ใช้กติกาเดิมของรอบนั้นจนจบ</li>
           </RuleList>
         </RuleSection>
       )}

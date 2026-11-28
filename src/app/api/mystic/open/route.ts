@@ -4,12 +4,16 @@ import { alertAdminError, shouldAlertRpcError } from "@/lib/admin-alert";
 import { apiError, parseJsonBody, requireUser, rpcErrorResponse } from "@/lib/api/respond";
 import { rateLimitResponse } from "@/lib/api/rate-limit";
 import { TILES } from "@/lib/mystic/config";
+import { drawBonusRoll } from "@/lib/mystic/draw";
 import { toRoundView, type MysticRoundView } from "@/lib/mystic/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const Body = z.object({ roundId: z.string().uuid(), tile: z.number().int().min(0).max(TILES - 1) });
 
-/** Open one chest. Everything (safe or cursed, multiplier, automatic payout at the cap / all chests) is decided by `mystic_open` in the database. */
+/**
+ * Open one chest. The client sends only the round and the chest. The bonus roll is drawn here with crypto; everything else (safe or cursed,
+ * whether this chest unlocks the bonus and which multiplier the roll gives, automatic payout) is decided by `mystic_open_bonus` in the database.
+ */
 export async function POST(request: Request) {
   const ctx: { userId?: string } = {};
   try {
@@ -21,7 +25,11 @@ export async function POST(request: Request) {
     const { data: body, response: bad } = await parseJsonBody(request, Body);
     if (!body) return bad;
 
-    const { data, error } = await createAdminClient().rpc("mystic_open", { p_user_id: user.id, p_round_id: body.roundId, p_tile: body.tile });
+    const admin = createAdminClient();
+    const args = { p_user_id: user.id, p_round_id: body.roundId, p_tile: body.tile };
+    let { data, error } = await admin.rpc("mystic_open_bonus", { ...args, p_roll: drawBonusRoll() });
+    // migration 0025 not installed yet: the original function
+    if (error?.code === "PGRST202") ({ data, error } = await admin.rpc("mystic_open", args));
     if (error) {
       if (shouldAlertRpcError(error)) await alertAdminError({ where: "mystic_open (เปิดหีบ)", userId: user.id, error });
       return rpcErrorResponse(error);

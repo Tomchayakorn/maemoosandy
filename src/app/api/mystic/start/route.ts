@@ -15,7 +15,8 @@ const Body = z.object({
 
 /**
  * Start a round of เปิดหีบมนตรา. The client sends only the bet and the number of cursed chests; the user is the verified session and the
- * cursed positions are drawn here with crypto. `mystic_start` (migration 0020) charges the bet and creates the round in one transaction.
+ * cursed positions are drawn here with crypto. `mystic_start_bonus` (migration 0025, else `mystic_start` of 0020) charges the bet and creates
+ * the round in one transaction.
  */
 export async function POST(request: Request) {
   const ctx: { userId?: string } = {};
@@ -28,12 +29,11 @@ export async function POST(request: Request) {
     const { data: body, response: bad } = await parseJsonBody(request, Body);
     if (!body) return bad;
 
-    const { data, error } = await createAdminClient().rpc("mystic_start", {
-      p_user_id: user.id,
-      p_bet: body.bet,
-      p_mines: body.mines,
-      p_mine_mask: drawMineMask(body.mines),
-    });
+    const admin = createAdminClient();
+    const args = { p_user_id: user.id, p_bet: body.bet, p_mines: body.mines, p_mine_mask: drawMineMask(body.mines) };
+    let { data, error } = await admin.rpc("mystic_start_bonus", args);
+    // migration 0025 not installed yet: a round under the original rules
+    if (error?.code === "PGRST202") ({ data, error } = await admin.rpc("mystic_start", args));
     if (error) {
       if (shouldAlertRpcError(error)) await alertAdminError({ where: "mystic_start (หักเดิมพัน/เริ่มรอบ)", userId: user.id, error });
       return rpcErrorResponse(error);

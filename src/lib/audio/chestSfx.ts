@@ -8,6 +8,7 @@ import type { RewardTier } from "@/lib/mystic/sfx-tier";
  *
  *   open()        — the moment the player taps a chest: a wooden latch thunk, a short creak and three soft magical sparkles
  *   reward(tier)  — the moment a prize shows: gold coin clinks and a bright chime arpeggio; the bigger the tier the grander it gets
+ *   bonus(m)      — the bonus multiplier is unlocked (x2 / x5 / x8): a rising crystal call and sparkle, with a coin shower from x5
  *
  * The synthesis toolkit, mute rule (header music toggle), ducking and level limiting live in SfxBase.
  */
@@ -35,6 +36,20 @@ class ChestSfx extends SfxBase {
   /** A prize shows (a safe chest, or coins taken): coins + chimes, grander for a bigger tier. */
   reward(tier: RewardTier) {
     this.coinReward(tier);
+  }
+
+  /** A bonus multiplier was unlocked. */
+  bonus(multiplier: number) {
+    if (multiplier >= 5) this.coinReward(multiplier >= 8 ? "jackpot" : "big", 1.06);
+    const a = this.begin();
+    if (!a) return;
+    const { ctx, out } = a;
+    const t = ctx.currentTime + 0.02;
+    // a crystal call rising (B5 → D#6 → F#6 → B6), one step higher for x8
+    const lift = multiplier >= 8 ? 1.122 : 1;
+    [987.8, 1244.5, 1480, 1975.5].forEach((f, i) => this.bell(ctx, out, f * lift, t + i * 0.1, 0.55, 0.12, (i - 1.5) * 0.25));
+    this.burst(ctx, out, t + 0.3, 0.7, { f: 6000, gain: 0.035, slow: true }); // sparkle
+    this.end(multiplier >= 8 ? 2.6 : multiplier >= 5 ? 1.9 : 1.2);
   }
 
   /** For debugging in the console: window.__chestSfx.debug() */
