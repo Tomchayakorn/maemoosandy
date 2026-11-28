@@ -253,6 +253,9 @@ export type Database = {
           level: number;
           status: "active" | "cashed" | "lost" | "cleared";
           payout: number;
+          /** migration 0023; absent before it */
+          bonus_version?: number;
+          bonus_multiplier?: number | null;
           created_at: Timestamp;
           finished_at: Timestamp | null;
         };
@@ -512,6 +515,18 @@ export type Database = {
       };
       power_spin: {
         Args: { p_user_id: string; p_round_id: string; p_slice: number };
+        Returns: Json;
+      };
+      power_bonus_unlock_level: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      power_start_bonus: {
+        Args: { p_user_id: string; p_bet: number };
+        Returns: Json; // round view
+      };
+      power_spin_bonus: {
+        Args: { p_user_id: string; p_round_id: string; p_slice: number; p_roll: number };
         Returns: Json;
       };
       power_stop: {

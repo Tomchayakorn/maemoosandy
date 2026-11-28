@@ -3,7 +3,7 @@ import { reconcileRound } from "./reconcile";
 import type { PowerRoundView } from "./types";
 
 const view = (o: Partial<PowerRoundView> = {}): PowerRoundView => ({
-  roundId: "r1", status: "active", bet: 100, level: 3, payout: 138, balance: 900, auto: null, slice: null, failed: false, ...o,
+  roundId: "r1", status: "active", bet: 100, level: 3, payout: 138, balance: 900, auto: null, slice: null, failed: false, version: 1, bonus: null, unlocked: false, ...o,
 });
 
 describe("reconcileRound", () => {

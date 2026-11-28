@@ -14,6 +14,7 @@ import { pitchFor } from "@/lib/power-wheel/sfx-pitch";
  *   climb(level)     — a level was cleared: coin clink + a bright chime whose pitch rises with the level (up to an octave)
  *   reward(tier, level) — coins taken / paid out automatically: gold coin clinks + chimes, grander for a bigger prize (same tiers as เปิดหีบมนตรา),
  *                      pitched a little higher for a higher level
+ *   bonus(m)         — the bonus multiplier is unlocked (x2 / x5 / x8): a rising call and sparkle, with a coin shower from x5, grandest at x8
  *   fail()           — fell on a danger slice: a low thud, two sinking minor notes and a dull crumble — clearly unlike any win
  *
  * Mute rule (header music toggle), music ducking, level limiting and cleanup live in SfxBase. Every call is a no-op when muted.
@@ -81,6 +82,20 @@ class PowerSfx extends SfxBase {
   /** Coins taken, or the round paid out by itself. */
   reward(tier: RewardTier, level = 0) {
     this.coinReward(tier, pitchFor(level));
+  }
+
+  /** A bonus multiplier was unlocked. */
+  bonus(multiplier: number) {
+    if (multiplier >= 5) this.coinReward(multiplier >= 8 ? "jackpot" : "big", 1.06);
+    const a = this.begin();
+    if (!a) return;
+    const { ctx, out } = a;
+    const t = ctx.currentTime + 0.02;
+    // a bright rising call (A5 → C#6 → E6 → A6), one step higher for x8
+    const lift = multiplier >= 8 ? 1.122 : 1;
+    [880, 1108.7, 1318.5, 1760].forEach((f, i) => this.bell(ctx, out, f * lift, t + i * 0.1, 0.55, 0.12, (i - 1.5) * 0.25));
+    this.burst(ctx, out, t + 0.3, 0.7, { f: 6000, gain: 0.035, slow: true }); // sparkle
+    this.end(multiplier >= 8 ? 2.6 : multiplier >= 5 ? 1.9 : 1.2);
   }
 
   /** Fell on a danger slice: the round is over. */

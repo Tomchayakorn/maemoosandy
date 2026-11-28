@@ -7,13 +7,16 @@ import { motion, useReducedMotion } from "framer-motion";
 import { goldCelebration, goldSparkleAt } from "@/components/fx/confetti";
 import { GoldButton, goldButtonClass } from "@/components/ui/GoldButton";
 import { useSurpriseBlock } from "@/lib/cat-game/surprise-block";
-import { BETS, dangerCount, dangerSlices, MAX_LEVEL, MAX_PAYOUT, multiplierBp, payoutFor, reachesCap, SLICES } from "@/lib/power-wheel/config";
+import {
+  BETS, BONUS_UNLOCK_LEVEL, baseMultiplierBp, dangerCount, dangerSlices, MAX_LEVEL, MAX_PAYOUT, roundPayout, roundReachesCap, SLICES, type Bonus, type RulesVersion,
+} from "@/lib/power-wheel/config";
 import type { PowerRoundView } from "@/lib/power-wheel/types";
 import { formatCoins } from "@/lib/pricing";
 import { walletBus } from "@/lib/wallet-bus";
 import { powerSfx } from "@/lib/audio/powerSfx";
 import { rewardTier } from "@/lib/mystic/sfx-tier";
 import { reconcileRound } from "@/lib/power-wheel/reconcile";
+import { BonusAura, BonusBurst, BonusStrip } from "./Bonus";
 import { ClimbWheel } from "./ClimbWheel";
 import { TowerBackdrop } from "./tower/TowerBackdrop";
 
@@ -23,13 +26,29 @@ const SPIN_SECONDS = 2.4;
 /** a little random offset inside the landing slice (presentation only) */
 const jitter = () => (Math.random() - 0.5) * 20;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Multiplier after k levels including the round's bonus (which only counts from the unlock level), basis points. */
+const effectiveBp = (k: number, version: RulesVersion, bonus: Bonus | null) => {
+  const bp = baseMultiplierBp(k, version);
+  return bp === null ? null : bp * (k >= BONUS_UNLOCK_LEVEL ? (bonus ?? 1) : 1);
+};
 
 /**
  * วงล้อไต่ชั้น — no game logic here. The server charges the bet, draws the slice, decides safe/danger and pays out
  * (POST /api/power-wheel/start | spin | stop); the client only draws the wheel and animates it onto the slice the server chose.
  * Prizes go to the coin wallet only.
  */
-export function PowerWheelGame({ initialBalance, initialRound, unavailable = false }: { initialBalance: number; initialRound: PowerRoundView | null; unavailable?: boolean }) {
+export function PowerWheelGame({
+  initialBalance,
+  initialRound,
+  unavailable = false,
+  bonusAvailable = false,
+}: {
+  initialBalance: number;
+  initialRound: PowerRoundView | null;
+  unavailable?: boolean;
+  /** migration 0023 is installed: new rounds are bonus rounds */
+  bonusAvailable?: boolean;
+}) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const [balance, setBalance] = useState(initialBalance);
@@ -40,6 +59,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
   const [rotation, setRotation] = useState(0);
   const [glow, setGlow] = useState<"idle" | "win" | "lose">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [burst, setBurst] = useState<Bonus | null>(null); // the unlock celebration, decoration only
   const inFlight = useRef(false); // synchronous guard: state lags one render behind a fast double tap
   const roundRef = useRef<PowerRoundView | null>(initialRound); // the round currently shown (read by async code that would otherwise see an old closure)
   const mutationSeq = useRef(0); // bumped by every start / spin / stop: a state read that began before one of them is out of date
@@ -53,7 +73,13 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     balanceRef.current = balance;
   }, [balance]);
   useEffect(() => () => walletBus.release(balanceRef.current), []);
-  useEffect(() => () => powerSfx.stop(), []); // leaving the page: cut any sound and release the music ducking
+  useEffect(
+    () => () => {
+      powerSfx.stop(); // leaving the page: cut any sound and release the music ducking
+      setBurst(null); // so the celebration does not play again on a Back navigation
+    },
+    [],
+  );
 
   /** Show a round and remember it for async code. */
   function showRound(next: PowerRoundView | null) {
@@ -134,6 +160,7 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     setBusy(true);
     setError(null);
     setGlow("idle");
+    setBurst(null);
     const view = await post("/api/power-wheel/start", { bet });
     if (view) {
       powerSfx.start(); // the bet was taken, the round begins
@@ -172,10 +199,16 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
     setSpinning(false);
     showRound(view);
     setGlow(view.failed ? "lose" : "win");
-    // the wheel has stopped: a different sound for falling, for an automatic payout and for clearing a level
+    // the wheel has stopped: a different sound for falling, for an automatic payout, for unlocking a bonus and for clearing a level
+    const won = view.unlocked && view.bonus !== null && view.bonus > 1 ? view.bonus : null;
     if (view.failed) powerSfx.fail();
     else if (view.status !== "active") powerSfx.reward(rewardTier(view.payout, view.bet, view.auto), view.level);
+    else if (won) powerSfx.bonus(won);
     else powerSfx.climb(view.level);
+    if (won) {
+      setBurst(won);
+      if (won >= 5) goldCelebration();
+    }
     if (!view.failed && !reduce) goldSparkleAt(document.querySelector("[data-testid=climb-wheel]"));
     if (view.status !== "active") finished(view);
     inFlight.current = false;
@@ -212,8 +245,10 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
   const nextLevel = level + 1;
   const wheelLevel = round && !active && round.failed ? level + 1 : nextLevel; // after a loss the wheel still shows the level that was failed
   const danger = dangerSlices(Math.min(wheelLevel, MAX_LEVEL));
-  const nextBp = level < MAX_LEVEL ? multiplierBp(level + 1) : null;
-  const currentBp = level > 0 ? multiplierBp(level) : null;
+  const version: RulesVersion = round ? round.version : bonusAvailable ? 2 : 1;
+  const bonus = round?.bonus ?? null;
+  const nextBp = level < MAX_LEVEL ? effectiveBp(level + 1, version, bonus) : null;
+  const currentBp = level > 0 ? effectiveBp(level, version, bonus) : null;
   const safePct = dangerCount(nextLevel) !== null ? Math.round(((SLICES - dangerCount(nextLevel)!) / SLICES) * 100) : null;
 
   return (
@@ -228,9 +263,12 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
         {/* decorative 3D rings centred on the wheel, scrolling with it: they only follow "turning" and the cleared level */}
         <TowerBackdrop spinning={spinning} level={round && !round.failed ? round.level : 0} />
         <ClimbWheel danger={danger} rotation={rotation} seconds={seconds} spinning={spinning} glow={glow} />
+        {/* gold highlight while the round holds a bonus, and the one-off pop when it is unlocked */}
+        {bonus !== null && bonus > 1 && !round?.failed && <BonusAura bonus={bonus} />}
+        {burst !== null && <BonusBurst bonus={burst} onDone={() => setBurst(null)} />}
       </div>
 
-      {round === null && !unavailable && <Setup bet={bet} balance={balance} busy={busy} onBet={setBet} onStart={startRound} />}
+      {round === null && !unavailable && <Setup bet={bet} balance={balance} busy={busy} bonusAvailable={bonusAvailable} onBet={setBet} onStart={startRound} />}
 
       {round && active && (
         <>
@@ -242,25 +280,37 @@ export function PowerWheelGame({ initialBalance, initialRound, unavailable = fal
             <GoldButton variant="outline" onClick={stop} disabled={busy || level < 1} size="lg" className="h-12 w-full border-2 text-base" data-testid="climb-stop">
               {level < 1 ? "ผ่านอย่างน้อย 1 ชั้นก่อน จึงรับเหรียญได้" : `💰 รับเหรียญขั้นนี้ +${formatCoins(round.payout)}`}
             </GoldButton>
+            {/* one line directly under the buttons: seen without scrolling, and above the floating LINE button */}
+            {version === 2 && <BonusStrip level={level} bonus={bonus} />}
           </div>
           <div className="flex flex-col gap-3 rounded-3xl border-gold-frame bg-[linear-gradient(160deg,rgb(40_26_70/0.85),rgb(15_12_30/0.95))] p-3.5 shadow-[0_0_30px_-10px_rgb(168_85_247/0.7)]">
-            <StatusBar level={level} bet={round.bet} payout={round.payout} currentBp={currentBp} nextBp={nextBp} nextPayout={nextBp !== null ? payoutFor(round.bet, level + 1) : null} safePct={safePct} />
+            <StatusBar
+              level={level}
+              bet={round.bet}
+              payout={round.payout}
+              currentBp={currentBp}
+              nextBp={nextBp}
+              nextPayout={nextBp !== null ? roundPayout(round.bet, level + 1, version, bonus) : null}
+              nextReachesCap={roundReachesCap(round.bet, level + 1, version, bonus)}
+              nextUnlocks={version === 2 && bonus === null && level + 1 === BONUS_UNLOCK_LEVEL}
+              safePct={safePct}
+            />
           </div>
         </>
       )}
 
-      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); showRound(null); setError(null); setGlow("idle"); }} canAfford={balance >= BETS[0]} />}
+      {round && !active && <Result round={round} reduce={!!reduce} onAgain={() => { powerSfx.stop(); showRound(null); setError(null); setGlow("idle"); setBurst(null); }} canAfford={balance >= BETS[0]} />}
 
       {error && <p role="alert" className="rounded-xl border border-rose-400/40 bg-velvet/80 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
-      <MultiplierTable level={level} />
+      <MultiplierTable level={level} version={version} bonus={bonus} />
     </section>
   );
 }
 
 /** Compact status: level, power (multiplier) and accumulated coins, a one-row progress bar and one line about the next level. */
 function StatusBar({
-  level, bet, payout, currentBp, nextBp, nextPayout, safePct,
+  level, bet, payout, currentBp, nextBp, nextPayout, nextReachesCap, nextUnlocks, safePct,
 }: {
   level: number;
   bet: number;
@@ -268,6 +318,9 @@ function StatusBar({
   currentBp: number | null;
   nextBp: number | null;
   nextPayout: number | null;
+  nextReachesCap: boolean;
+  /** the next level unlocks the bonus: what it pays is at least `nextPayout` */
+  nextUnlocks: boolean;
   safePct: number | null;
 }) {
   return (
@@ -306,12 +359,13 @@ function StatusBar({
             <p className="text-cream">
               ไปที่ <b data-testid="next-payout" className="font-tarot text-sm">{formatCoins(nextPayout)}</b>
               <span className="text-emerald-300"> (+{formatCoins(Math.max(0, nextPayout - payout))})</span>
+              {nextUnlocks && <span className="text-gold-light"> ขึ้นไป 🎁</span>}
             </p>
           </div>
           <div className="rounded-xl border border-gold/40 bg-gold/5 px-2 py-1">
             <p className="text-gold-light">🏁 เพดาน {formatCoins(MAX_PAYOUT)}</p>
             <p className="text-cream" data-testid="cap-left">
-              {reachesCap(bet, level + 1) ? (
+              {nextReachesCap ? (
                 <>ชั้นหน้าถึงเพดาน จบรอบ จ่ายเอง</>
               ) : (
                 <>
@@ -327,16 +381,21 @@ function StatusBar({
 }
 
 /** All 12 multipliers, folded away so it does not take over a phone screen. */
-function MultiplierTable({ level }: { level: number }) {
+function MultiplierTable({ level, version, bonus }: { level: number; version: RulesVersion; bonus: Bonus | null }) {
   return (
     <details className="group rounded-2xl border border-gold/25 bg-velvet/60 px-3 py-2 text-left">
       <summary className="cursor-pointer list-none text-center text-xs text-gold-light marker:hidden">ดูตารางตัวคูณทุกชั้น <span className="inline-block transition group-open:rotate-180">▾</span></summary>
+      {version === 2 && (
+        <p data-testid="table-note" className="mt-1.5 text-center text-[11px] text-cream-muted">
+          {bonus !== null && bonus > 1 ? `ตั้งแต่ชั้น ${BONUS_UNLOCK_LEVEL} รวมโบนัส ×${bonus} ของรอบนี้แล้ว` : bonus === 1 ? "รอบนี้ไม่ติดโบนัส ใช้ตัวคูณตามตาราง" : `ตั้งแต่ชั้น ${BONUS_UNLOCK_LEVEL} ตัวคูณจะคูณด้วยโบนัสที่สุ่มได้`}
+        </p>
+      )}
       <ol className="mt-2 grid grid-cols-3 gap-1.5" aria-label="ตารางตัวคูณ">
         {Array.from({ length: MAX_LEVEL }, (_, i) => {
           const k = i + 1;
           return (
             <li key={k} className={"rounded-lg border px-1.5 py-1 text-center text-[11px] leading-tight " + (k <= level ? "border-gold-light bg-gold/20 text-gold-light" : "border-gold/20 text-cream-muted")}>
-              ชั้น {k} <b className="font-tarot">{x(multiplierBp(k))}</b>
+              ชั้น {k} <b className="font-tarot">{x(effectiveBp(k, version, bonus))}</b>
               <span className="block text-[10px] opacity-80">ช่อง 💀 {dangerCount(k)}/{SLICES}</span>
             </li>
           );
@@ -346,7 +405,7 @@ function MultiplierTable({ level }: { level: number }) {
   );
 }
 
-function Setup({ bet, balance, busy, onBet, onStart }: { bet: number; balance: number; busy: boolean; onBet: (b: number) => void; onStart: () => void }) {
+function Setup({ bet, balance, busy, bonusAvailable, onBet, onStart }: { bet: number; balance: number; busy: boolean; bonusAvailable: boolean; onBet: (b: number) => void; onStart: () => void }) {
   const chip = (on: boolean) =>
     "flex h-12 min-w-[4rem] flex-1 items-center justify-center rounded-xl border text-sm transition " +
     (on ? "border-gold-light bg-gold/20 text-gold-light" : "border-gold/40 text-cream hover:border-gold-light");
@@ -374,6 +433,7 @@ function Setup({ bet, balance, busy, onBet, onStart }: { bet: number; balance: n
           <Link href="/topup" className={goldButtonClass({ className: "w-full" })}>เติมเหรียญเลย</Link>
         </div>
       )}
+      {bonusAvailable && <BonusStrip level={null} bonus={null} />}
       <p className="rounded-xl border border-gold/20 bg-midnight/60 p-3 text-xs leading-relaxed text-cream-muted">
         หมุนวงล้อทีละชั้น ช่อง ✨ คือผ่านชั้นและพลังสะสมเพิ่ม ช่อง 💀 คือจบรอบและเสียเดิมพัน ยิ่งชั้นสูง ช่อง 💀 ยิ่งมาก กดหยุดรับเหรียญได้ทุกเมื่อหลังผ่านอย่างน้อย 1 ชั้น รางวัลสะสมเข้ากระเป๋าเหรียญและใช้ในระบบเท่านั้น
       </p>
@@ -402,6 +462,7 @@ function Result({ round, reduce, onAgain, canAfford }: { round: PowerRoundView; 
         <>
           <p className="text-xs tracking-widest text-gold/80">{round.auto === "cap" ? "ถึงโบนัสสูงสุดต่อรอบ ✨" : round.auto === "top" ? "ไต่ถึงชั้นสูงสุด ✨" : "รับเหรียญสำเร็จ ✨"}</p>
           <p className="font-tarot text-5xl font-bold text-gold-gradient">+{formatCoins(round.payout)}</p>
+          {round.bonus !== null && round.bonus > 1 && <p data-testid="result-bonus" className="text-sm font-semibold text-gold-light">รวมโบนัส ×{round.bonus} แล้ว</p>}
           <p data-testid="climb-credited" className="text-sm text-cream">✓ รางวัลสะสมเข้ากระเป๋าเหรียญเรียบร้อยแล้ว (คงเหลือ {formatCoins(round.balance)} เหรียญ)</p>
         </>
       )}

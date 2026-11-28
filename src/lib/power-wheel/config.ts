@@ -78,3 +78,58 @@ export function strategyReturn(bet: number, k: number): number {
 }
 
 export type RoundStatus = "active" | "cashed" | "lost" | "cleared";
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------
+ * Bonus multipliers (migration 0023, "bonus rounds" = version 2). Clearing BONUS_UNLOCK_LEVEL draws ×1/×2/×5/×8 ONCE for the round (the
+ * server rolls 0..999, the database maps it and stores it). From that level on the table is the old one divided by the average bonus, so
+ * every stopping strategy still returns at most 1 − edge: the bonus is paid for by the lower base, not by the house.
+ * ------------------------------------------------------------------------------------------------------------------------------------- */
+export type RulesVersion = 1 | 2;
+export type Bonus = 1 | 2 | 5 | 8;
+export const BONUS_UNLOCK_LEVEL = 3;
+/** Rolls are 0..BONUS_ROLLS−1; each row takes `rolls` of them, from the top of the list down; the rest are ×1. */
+export const BONUS_ROLLS = 1000;
+export const BONUS_ODDS: readonly { bonus: Exclude<Bonus, 1>; rolls: number }[] = [
+  { bonus: 8, rolls: 4 },
+  { bonus: 5, rolls: 10 },
+  { bonus: 2, rolls: 50 },
+];
+/** Rolls that give no bonus (×1). */
+export const NO_BONUS_ROLLS = BONUS_ROLLS - BONUS_ODDS.reduce((a, o) => a + o.rolls, 0);
+/** Average multiplier × 1000 (1118 = ×1.118): what the base table is divided by from the unlock level on. */
+export const BONUS_AVERAGE_1000 = NO_BONUS_ROLLS + BONUS_ODDS.reduce((a, o) => a + o.bonus * o.rolls, 0);
+
+/** The multiplier a roll gives; null for anything that is not a roll. */
+export function bonusForRoll(roll: number): Bonus | null {
+  if (!Number.isInteger(roll) || roll < 0 || roll >= BONUS_ROLLS) return null;
+  let from = 0;
+  for (const o of BONUS_ODDS) {
+    if (roll < (from += o.rolls)) return o.bonus;
+  }
+  return 1;
+}
+
+/** Base multiplier (before the bonus) after clearing k levels under a rules version, basis points. */
+export function baseMultiplierBp(k: number, version: RulesVersion = 1): number | null {
+  const old = multiplierBp(k);
+  if (old === null || version === 1 || k < BONUS_UNLOCK_LEVEL) return old;
+  let den = BigInt(1);
+  for (let i = 0; i < k; i++) den *= BigInt(SLICES - DANGER[i]);
+  // the same exact fraction as the old table, divided by the average bonus, floored once (BigInt: the numerator passes 2^53)
+  return Number((BigInt(10_000 - EDGE_BP) * BigInt(SLICES) ** BigInt(k) * BigInt(1000)) / (den * BigInt(BONUS_AVERAGE_1000)));
+}
+
+/** Coins before the cap. `bonus` is null while locked (counts as ×1) and is ignored in a version 1 round. */
+function rawPayout(bet: number, k: number, version: RulesVersion, bonus: Bonus | null): number {
+  const bp = baseMultiplierBp(k, version);
+  return bp === null ? 0 : Math.floor((bet * bp * (version === 2 ? (bonus ?? 1) : 1)) / 10_000);
+}
+
+/** What a round of this version and bonus pays after clearing k levels, never above MAX_PAYOUT. */
+export function roundPayout(bet: number, k: number, version: RulesVersion = 1, bonus: Bonus | null = null): number {
+  return Math.min(rawPayout(bet, k, version, bonus), MAX_PAYOUT);
+}
+
+export function roundReachesCap(bet: number, k: number, version: RulesVersion = 1, bonus: Bonus | null = null): boolean {
+  return rawPayout(bet, k, version, bonus) >= MAX_PAYOUT;
+}

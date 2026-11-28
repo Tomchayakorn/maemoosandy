@@ -1,10 +1,14 @@
-import { BETS, EDGE_BP, MAX_LEVEL, MAX_PAYOUT, SLICES } from "@/lib/power-wheel/config";
+import {
+  BETS, BONUS_AVERAGE_1000, BONUS_ODDS, BONUS_ROLLS, BONUS_UNLOCK_LEVEL, EDGE_BP, MAX_LEVEL, MAX_PAYOUT, NO_BONUS_ROLLS, SLICES, roundPayout,
+} from "@/lib/power-wheel/config";
 import { RuleList, RuleSection } from "./RuleParts";
 
 const n = (v: number) => v.toLocaleString("th-TH");
+const pct = (rolls: number) => `${(rolls / BONUS_ROLLS) * 100}%`;
 
 /** Rules of วงล้อไต่ชั้น. Numbers come from the constants the game uses (a test keeps the SQL in sync with them). */
-export function PowerWheelRules() {
+export function PowerWheelRules({ bonus = false }: { bonus?: boolean }) {
+  const U = BONUS_UNLOCK_LEVEL;
   return (
     <>
       <RuleSection title="1. วิธีเล่น">
@@ -19,12 +23,29 @@ export function PowerWheelRules() {
 
       <RuleSection title="2. ตัวคูณและโอกาส">
         <RuleList>
-          <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการผ่านชั้นติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นจึงประมาณ {100 - EDGE_BP / 100}% ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่ชั้นไหน</li>
+          {bonus ? (
+            <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการผ่านชั้นติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นเมื่อรวมโบนัสแล้วจึง<b>ไม่เกินประมาณ {100 - EDGE_BP / 100}%</b> ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่ชั้นไหน</li>
+          ) : (
+            <li>ตัวคูณคำนวณจากความน่าจะเป็นจริงของการผ่านชั้นติดกัน แล้วหักค่าดำเนินการ {EDGE_BP / 100}% ผลคืนเฉลี่ยของผู้เล่นจึงประมาณ {100 - EDGE_BP / 100}% ของเดิมพัน ไม่ว่าจะหยุดรับเหรียญที่ชั้นไหน</li>
+          )}
           <li>ยอดรับเหรียญปัดเป็นเหรียญเต็ม (ปัดลง) ดังนั้นเดิมพันน้อยอาจได้ผลคืนต่ำกว่าค่าเฉลี่ยเล็กน้อย</li>
           <li>ช่องที่วงล้อหยุดถูกสุ่มโดยระบบหลังบ้านทุกครั้งและเปลี่ยนไม่ได้ ไม่มีจังหวะหรือวิธีกดที่ทำให้โชคดีกว่า</li>
           <li>ตารางตัวคูณของแต่ละชั้นแสดงบนบันไดชั้นของเกม</li>
         </RuleList>
       </RuleSection>
+
+      {bonus && (
+        <RuleSection title="โบนัสตัวคูณ ×2 ×5 ×8">
+          <RuleList>
+            <li>ผ่านชั้น {U} แล้ว ระบบหลังบ้านสุ่มตัวคูณ <b>1 ครั้งต่อรอบ</b>: {[...BONUS_ODDS].reverse().map((o) => `×${o.bonus} โอกาส ${pct(o.rolls)}`).join(" · ")} · ไม่ติดโบนัส (×1) {pct(NO_BONUS_ROLLS)}</li>
+            <li>รางวัล = ปัดลง(เดิมพัน × ตัวคูณของชั้น × โบนัส) ใช้กับรางวัลตั้งแต่ชั้น {U} ขึ้นไป และไม่เกิน {n(MAX_PAYOUT)} เหรียญ</li>
+            <li>
+              <b>ตัวคูณของชั้นตั้งแต่ชั้น {U} ต่ำกว่าแบบไม่มีโบนัส</b> (หารด้วยค่าเฉลี่ยโบนัส {BONUS_AVERAGE_1000 / 1000}) เพื่อนำส่วนนี้ไปจ่ายโบนัส เช่น เดิมพัน 100 ชั้น {U}: ×1 รับ {n(roundPayout(100, U, 2, 1))} (เดิม {n(roundPayout(100, U, 1))}) · ×2 รับ {n(roundPayout(100, U, 2, 2))} · ×5 รับ {n(roundPayout(100, U, 2, 5))} · ×8 รับ {n(roundPayout(100, U, 2, 8))}
+            </li>
+            <li>ตกช่อง 💀 หลังปลดล็อกแล้ว ยังเสียเดิมพันและโบนัสของรอบนั้น · รอบที่เริ่มก่อนเปิดระบบโบนัสใช้กติกาเดิมจนจบ</li>
+          </RuleList>
+        </RuleSection>
+      )}
 
       <RuleSection title="3. โบนัสสูงสุดและเงื่อนไขอื่น">
         <RuleList>
